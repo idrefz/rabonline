@@ -122,9 +122,11 @@ if st.button("Proses BOQ"):
     # Proteksi download
     password = st.text_input("Masukkan password untuk download", type="password")
     if password == "sdibisa":
-        output = BytesIO()
-        df.to_excel(output, index=False, engine='openpyxl')
-        st.download_button("⬇️ Download Excel", output.getvalue(), file_name=f"{lop_name}.xlsx")
+output = BytesIO()
+df.to_excel(output, index=False, engine='openpyxl')
+output.seek(0)  # penting!
+st.download_button("⬇️ Download Excel", output, file_name=f"{lop_name}.xlsx")
+
 
     # Tombol reset
     if st.button("🔁 Input Lagi (Reset Volume ke 0)"):

@@ -31,6 +31,10 @@ def reset_form():
     st.session_state.izin = ""
     st.session_state.lop_name = ""
 
+# Initialize all fields to empty/zero if not already in session state
+if 'sumber' not in st.session_state:
+    reset_form()
+
 # Form input
 with st.form("boq_form"):
     # Section 1: Sumber Data (ODC/ODP) - Sangat Penting!
@@ -42,27 +46,32 @@ with st.form("boq_form"):
     st.subheader("🔹 Input Kabel")
     col1, col2 = st.columns(2)
     with col1:
-        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=0.0, key="kabel_12")
+        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=st.session_state.kabel_12, key="kabel_12")
     with col2:
-        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=0.0, key="kabel_24")
+        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=st.session_state.kabel_24, key="kabel_24")
     
     # Section 3: Input ODP (8 dan 16 terpisah)
     st.subheader("🔹 Input ODP")
     col1, col2 = st.columns(2)
     with col1:
-        odp_8 = st.number_input("Jumlah ODP 8", min_value=0, value=0, key="odp_8")
+        odp_8 = st.number_input("Jumlah ODP 8", min_value=0, value=st.session_state.odp_8, key="odp_8")
     with col2:
-        odp_16 = st.number_input("Jumlah ODP 16", min_value=0, value=0, key="odp_16")
+        odp_16 = st.number_input("Jumlah ODP 16", min_value=0, value=st.session_state.odp_16, key="odp_16")
     
     # Section 4: Input Pendukung Lainnya
     st.subheader("🔹 Input Pendukung")
-    tiang_new = st.number_input("Total Tiang Baru", min_value=0, value=0, key="tiang_new")
-    tiang_existing = st.number_input("Total Tiang Existing", min_value=0, value=0, key="tiang_existing")
-    tikungan = st.number_input("Jumlah Tikungan", min_value=0, value=0, key="tikungan")
-    izin = st.text_input("Nilai Izin (isi jika ada)", key="izin")
-    lop_name = st.text_input("Nama LOP (untuk nama file export)", key="lop_name")
+    tiang_new = st.number_input("Total Tiang Baru", min_value=0, value=st.session_state.tiang_new, key="tiang_new")
+    tiang_existing = st.number_input("Total Tiang Existing", min_value=0, value=st.session_state.tiang_existing, key="tiang_existing")
+    tikungan = st.number_input("Jumlah Tikungan", min_value=0, value=st.session_state.tikungan, key="tikungan")
+    izin = st.text_input("Nilai Izin (isi jika ada)", value=st.session_state.izin, key="izin")
+    lop_name = st.text_input("Nama LOP (untuk nama file export)", value=st.session_state.lop_name, key="lop_name")
     
     submitted = st.form_submit_button("🚀 Proses BOQ")
+    reset_button = st.form_submit_button("🔄 Reset Form")
+
+if reset_button:
+    reset_form()
+    st.rerun()
 
 if submitted and not st.session_state.downloaded:
     if not lop_name:
@@ -74,8 +83,8 @@ if submitted and not st.session_state.downloaded:
     
     # 1. PERHITUNGAN VOLUME KABEL (Tergantung Sumber Data)
     if sumber == "ODC":
-        vol_kabel_12 = round((kabel_12 * 1.02) + total_odp) if kabel_12 > 0 else 0
-        vol_kabel_24 = round((kabel_24 * 1.02) + total_odp) if kabel_24 > 0 else 0
+        vol_kabel_12 = round((kabel_12 * 1.02) + total_odp if kabel_12 > 0 else 0
+        vol_kabel_24 = round((kabel_24 * 1.02) + total_odp if kabel_24 > 0 else 0
     else:  # ODP
         vol_kabel_12 = round(kabel_12 * 1.02) if kabel_12 > 0 else 0
         vol_kabel_24 = round(kabel_24 * 1.02) if kabel_24 > 0 else 0

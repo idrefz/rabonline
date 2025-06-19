@@ -16,8 +16,7 @@ if 'boq_state' not in st.session_state:
         'ready': False,
         'excel_data': None,
         'project_name': "",
-        'updated_items': [],
-        'summary': {}
+        'updated_items': []
     }
 
 # ======================
@@ -29,21 +28,43 @@ def calculate_volumes(inputs):
     vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
     vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
 
-    vol_puas = max(0, (total_odp * 2) - 1 + inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan'])
+    if total_odp == 0:
+        vol_puas = 0
+    elif total_odp == 1:
+        vol_puas = 1
+    else:
+        vol_puas = (total_odp * 2) - 1
+    vol_puas += inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan']
 
-    vol_os_sm_1_odc = 0
     if inputs['sumber'] == "ODC":
         if inputs['kabel_12'] > 0:
             vol_os_sm_1_odc = 12 + total_odp
         elif inputs['kabel_24'] > 0:
             vol_os_sm_1_odc = 24 + total_odp
+        else:
+            vol_os_sm_1_odc = 0
+    else:
+        vol_os_sm_1_odc = 0
 
     vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
     vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
 
-    vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
-    vol_pc_apc = 18 if vol_pc_upc == 1 else vol_pc_upc * 2 if vol_pc_upc > 1 else 0
-    vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0
+    if total_odp == 0:
+        vol_pc_upc = 0
+    else:
+        vol_pc_upc = ((total_odp - 1) // 4) + 1
+
+    if vol_pc_upc == 1:
+        vol_pc_apc = 18
+    elif vol_pc_upc > 1:
+        vol_pc_apc = vol_pc_upc * 2
+    else:
+        vol_pc_apc = 0
+
+    if inputs['sumber'] == "ODC" and total_odp > 0:
+        vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1
+    else:
+        vol_ps_1_4_odc = 0
 
     vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
     vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
@@ -65,47 +86,68 @@ def calculate_volumes(inputs):
         {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
-        {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if inputs['izin'] else 0, "izin_value": float(inputs['izin']) if inputs['izin'] else 0}
+        {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if inputs['izin'] else 0}
     ]
 
 # ======================
-# 🖥️ FORM UI
+# 🖥️ USER INTERFACE
 # ======================
-submitted = False
 with st.form("boq_form"):
-    st.subheader("📋 Project Info")
-    lop_name = st.text_input("Nama LOP")
+    st.subheader("📋 Project Information")
+    col1, col2 = st.columns(2)
+    with col1:
+        sumber = st.radio("Source Type:", ["ODC", "ODP"], index=0)
+    with col2:
+        lop_name = st.text_input("LOP Name:")
+        project_name = st.text_input("Project Name:")
+        sto_code = st.text_input("STO Code:")
 
-    st.subheader("📡 Cable")
-    kabel_12 = st.number_input("12 Core Cable (m)", min_value=0.0, value=0.0)
-    kabel_24 = st.number_input("24 Core Cable (m)", min_value=0.0, value=0.0)
+    st.subheader("📡 Cable Inputs")
+    col1, col2 = st.columns(2)
+    with col1:
+        kabel_12 = st.number_input("12 Core Cable (m):", min_value=0.0, value=0.0)
+    with col2:
+        kabel_24 = st.number_input("24 Core Cable (m):", min_value=0.0, value=0.0)
 
-    st.subheader("🏗️ ODP")
-    odp_8 = st.number_input("ODP 8 Port", min_value=0, value=0)
-    odp_16 = st.number_input("ODP 16 Port", min_value=0, value=0)
+    st.subheader("🏗️ ODP Inputs")
+    col1, col2 = st.columns(2)
+    with col1:
+        odp_8 = st.number_input("ODP 8 Port:", min_value=0, value=0)
+    with col2:
+        odp_16 = st.number_input("ODP 16 Port:", min_value=0, value=0)
 
-    st.subheader("🪜 Support")
-    tiang_new = st.number_input("Tiang Baru", min_value=0, value=0)
-    tiang_existing = st.number_input("Tiang Eksisting", min_value=0, value=0)
-    tikungan = st.number_input("Tikungan", min_value=0, value=0)
+    st.subheader("⚙️ Support Inputs")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        tiang_new = st.number_input("New Poles:", min_value=0, value=0)
+    with col2:
+        tiang_existing = st.number_input("Existing Poles:", min_value=0, value=0)
+    with col3:
+        tikungan = st.number_input("Bends:", min_value=0, value=0)
 
-    sumber = st.radio("Sumber", ["ODC", "ODP"], index=0)
-    izin = st.text_input("Preliminary (isi nominal jika ada)", value="")
+    izin = st.text_input("Special Permit (if any):", value="")
+    uploaded_file = st.file_uploader("Upload BOQ Template", type=["xlsx", "xls"])
 
-    uploaded_file = st.file_uploader("Unggah Template BOQ", type=["xlsx"])
     submitted = st.form_submit_button("🚀 Generate BOQ")
 
-# ======================
-# 🔄 PROCESSING
-# ======================
 if submitted:
-    if not uploaded_file or not lop_name:
-        st.warning("Lengkapi Nama LOP dan unggah file template!")
+    if not all([lop_name, project_name, sto_code]):
+        st.warning("Please complete all project information fields!")
+        st.stop()
+
+    if not uploaded_file:
+        st.warning("Please upload a template file!")
         st.stop()
 
     try:
         wb = openpyxl.load_workbook(uploaded_file)
         ws = wb.active
+
+        ws['B1'] = "DAFTAR HARGA SATUAN"
+        ws['B2'] = "PENGADAAN DAN PEMASANGAN GRANULAR MODERNIZATION"
+        ws['B3'] = f"PROJECT : {project_name}"
+        ws['B4'] = f"STO : {sto_code}"
+
         input_data = {
             'sumber': sumber,
             'kabel_12': kabel_12,
@@ -127,7 +169,7 @@ if submitted:
 
             if not special_permit_added and izin and row > 9 and not ws[f'B{row}'].value:
                 ws[f'B{row}'] = "Preliminary Project HRB/Kawasan Khusus"
-                ws[f'F{row}'] = float(izin)
+                ws[f'F{row}'] = izin
                 ws[f'G{row}'] = 1
                 special_permit_added = True
                 updated_count += 1
@@ -135,18 +177,9 @@ if submitted:
 
             for item in items:
                 if item["volume"] > 0 and designator == item["designator"]:
-                    if designator == "Preliminary Project HRB/Kawasan Khusus":
-                        ws[f'F{row}'] = item.get("izin_value", 0)
                     ws[f'G{row}'] = item["volume"]
                     updated_count += 1
                     break
-
-        summary = {
-            'material': ws['G289'].value or 0,
-            'jasa': ws['G290'].value or 0,
-            'total': ws['G291'].value or 0,
-            'cpp': round((odp_8 + odp_16) * 8 / (ws['G291'].value or 1), 4)
-        }
 
         output = BytesIO()
         wb.save(output)
@@ -156,45 +189,26 @@ if submitted:
             'ready': True,
             'excel_data': output,
             'project_name': lop_name,
-            'updated_items': [item for item in items if item['volume'] > 0],
-            'summary': summary
+            'updated_items': [item for item in items if item['volume'] > 0]
         }
 
-        st.success(f"✅ Berhasil update {updated_count} item!")
+        st.success(f"✅ Successfully updated {updated_count} items!")
+
+        with st.expander("📋 Updated Items"):
+            st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
 
     except Exception as e:
-        st.error(f"Terjadi kesalahan saat memproses: {str(e)}")
+        st.error(f"Error processing BOQ: {str(e)}")
 
-# ======================
-# 💾 DOWNLOAD OUTPUT & SUMMARY
-# ======================
 if st.session_state.boq_state.get('ready', False):
-    st.subheader("📥 Download BOQ")
+    st.subheader("📥 Download Results")
     st.download_button(
-        label="⬇️ Download File BOQ",
+        label="⬇️ Download BOQ File",
         data=st.session_state.boq_state['excel_data'],
-        file_name=f"BOQ-{st.session_state.boq_state['project_name']}.xlsx",
+        file_name=f"BOQ_{st.session_state.boq_state['project_name']}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    st.subheader("📌 Ringkasan BOQ")
-    summary = st.session_state.boq_state.get("summary", {})
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("MATERIAL", f"Rp {summary.get('material', 0):,.0f}")
-    col2.metric("JASA", f"Rp {summary.get('jasa', 0):,.0f}")
-    col3.metric("TOTAL", f"Rp {summary.get('total', 0):,.0f}")
-    col4.metric("CPP", f"{summary.get('cpp', 0):.4f}")
-
-    st.subheader("📋 Tabel Item BOQ")
-    st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
-
-    if st.button("🔄 Buat BOQ Baru"):
-        for key in ["kabel_12", "kabel_24", "odp_8", "odp_16", "tiang_new", "tiang_existing", "tikungan", "izin", "uploaded_file"]:
-            if key in st.session_state:
-                del st.session_state[key]
+    if st.button("🔄 Create New BOQ"):
         st.session_state.boq_state = {'ready': False}
         st.rerun()
-
-# Tampilan awal jika belum submit
-if not st.session_state.boq_state['ready']:
-    st.info("⬆️ Isi form dan unggah file template BOQ untuk mulai.")

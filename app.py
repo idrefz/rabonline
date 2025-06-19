@@ -5,7 +5,7 @@ from io import BytesIO
 # Inisialisasi session state
 def reset_form():
     """Reset semua nilai form ke default"""
-    st.session_state.update({
+    default_values = {
         'sumber': "ODC",
         'lop_name': "",
         'kabel_12': 0.0,
@@ -16,97 +16,99 @@ def reset_form():
         'tiang_existing': 0,
         'tikungan': 0,
         'izin': "",
-        'downloaded': False
-    })
+        'downloaded': False,
+        'show_download': False
+    }
+    for key, value in default_values.items():
+        st.session_state[key] = value
 
 if 'sumber' not in st.session_state:
     reset_form()
 
 # ==============================================
-# FORM INPUT DENGAN SUBMIT BUTTON YANG BENAR
+# FORM INPUT YANG BENAR
 # ==============================================
 
 with st.form("boq_form"):
     st.subheader("🔹 Data Proyek")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.sumber = st.radio(
+        # PERBAIKAN: Jangan langsung assign ke session state di sini
+        sumber = st.radio(
             "Sumber Data:", 
             ["ODC", "ODP"],
-            index=0,
-            key='sumber'
+            index=0 if st.session_state.sumber == "ODC" else 1,
+            key='sumber_radio'
         )
     with col2:
-        st.session_state.lop_name = st.text_input(
+        lop_name = st.text_input(
             "Nama LOP (untuk nama file):",
-            key='lop_name'
+            value=st.session_state.lop_name,
+            key='lop_name_input'
         )
 
     st.subheader("🔹 Input Kabel")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.kabel_12 = st.number_input(
+        kabel_12 = st.number_input(
             "Panjang Kabel 12 Core (meter):",
             min_value=0.0,
             value=st.session_state.kabel_12,
-            key='kabel_12'
+            key='kabel_12_input'
         )
     with col2:
-        st.session_state.kabel_24 = st.number_input(
+        kabel_24 = st.number_input(
             "Panjang Kabel 24 Core (meter):",
             min_value=0.0,
             value=st.session_state.kabel_24,
-            key='kabel_24'
+            key='kabel_24_input'
         )
 
     st.subheader("🔹 Input ODP")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.odp_8 = st.number_input(
+        odp_8 = st.number_input(
             "ODP 8 Port:",
             min_value=0,
             value=st.session_state.odp_8,
-            key='odp_8'
+            key='odp_8_input'
         )
     with col2:
-        st.session_state.odp_16 = st.number_input(
+        odp_16 = st.number_input(
             "ODP 16 Port:",
             min_value=0,
             value=st.session_state.odp_16,
-            key='odp_16'
+            key='odp_16_input'
         )
 
     st.subheader("🔹 Input Pendukung")
-    st.session_state.tiang_new = st.number_input(
+    tiang_new = st.number_input(
         "Tiang Baru:",
         min_value=0,
         value=st.session_state.tiang_new,
-        key='tiang_new'
+        key='tiang_new_input'
     )
-    st.session_state.tiang_existing = st.number_input(
+    tiang_existing = st.number_input(
         "Tiang Existing:",
         min_value=0,
         value=st.session_state.tiang_existing,
-        key='tiang_existing'
+        key='tiang_existing_input'
     )
-    st.session_state.tikungan = st.number_input(
+    tikungan = st.number_input(
         "Jumlah Tikungan:",
         min_value=0,
         value=st.session_state.tikungan,
-        key='tikungan'
+        key='tikungan_input'
     )
-    st.session_state.izin = st.text_input(
+    izin = st.text_input(
         "Nilai Izin (jika ada):",
         value=st.session_state.izin,
-        key='izin'
+        key='izin_input'
     )
 
-    # PERBAIKAN UTAMA: Gunakan st.form_submit_button() yang benar
-    col1, col2 = st.columns(2)
-    with col1:
-        submitted = st.form_submit_button("🚀 Proses BOQ")
-    with col2:
-        reset_clicked = st.form_submit_button("🔄 Reset Form")
+    # PERBAIKAN UTAMA: Gunakan st.form_submit_button() dengan benar
+    submitted = st.form_submit_button("🚀 Proses BOQ")
+    reset_clicked = st.form_submit_button("🔄 Reset Form")
 
 # ==============================================
 # PENANGANAN FORM SUBMIT
@@ -117,6 +119,20 @@ if reset_clicked:
     st.rerun()
 
 if submitted:
+    # Simpan nilai input ke session state
+    st.session_state.update({
+        'sumber': sumber,
+        'lop_name': lop_name,
+        'kabel_12': kabel_12,
+        'kabel_24': kabel_24,
+        'odp_8': odp_8,
+        'odp_16': odp_16,
+        'tiang_new': tiang_new,
+        'tiang_existing': tiang_existing,
+        'tikungan': tikungan,
+        'izin': izin
+    })
+    
     # Validasi input
     if not st.session_state.lop_name:
         st.warning("Harap masukkan Nama LOP terlebih dahulu!")
@@ -219,3 +235,23 @@ if submitted:
 
     except Exception as e:
         st.error(f"Terjadi kesalahan saat memproses: {str(e)}")
+
+# ==============================================
+# DOWNLOAD OPTIONS
+# ==============================================
+
+if st.session_state.get('show_download', False):
+    st.subheader("💾 Download Options")
+    
+    # Download hasil BOQ sebagai Excel
+    output_boq = BytesIO()
+    with pd.ExcelWriter(output_boq, engine='openpyxl') as writer:
+        st.session_state.df_result.to_excel(writer, index=False, sheet_name='BOQ')
+    output_boq.seek(0)
+    
+    st.download_button(
+        label="⬇️ Download Hasil BOQ (Excel)",
+        data=output_boq,
+        file_name=f"BOQ_{st.session_state.lop_name}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )

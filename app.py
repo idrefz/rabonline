@@ -67,14 +67,15 @@ def calculate_volumes(inputs):
     ]
 
 # ======================
-# 🖥️ FORM UI
+# 🗅️ FORM UI
 # ======================
 submitted = False
 with st.form("boq_form"):
     st.subheader("📋 Project Info")
     lop_name = st.text_input("Nama LOP")
+    sumber = st.radio("Sumber", ["ODC", "ODP"], index=0)
 
-    st.subheader("📡 Cable")
+    st.subheader("🛍️ Cable")
     kabel_12 = st.number_input("12 Core Cable (m)", min_value=0.0, value=0.0)
     kabel_24 = st.number_input("24 Core Cable (m)", min_value=0.0, value=0.0)
 
@@ -87,7 +88,6 @@ with st.form("boq_form"):
     tiang_existing = st.number_input("Tiang Eksisting", min_value=0, value=0)
     tikungan = st.number_input("Tikungan", min_value=0, value=0)
 
-    sumber = st.radio("Sumber", ["ODC", "ODP"], index=0)
     izin = st.text_input("Preliminary (isi nominal jika ada)", value="")
     uploaded_file = st.file_uploader("Unggah Template BOQ", type=["xlsx"])
     submitted = st.form_submit_button("🚀 Generate BOQ")
@@ -138,11 +138,16 @@ if submitted:
                     updated_count += 1
                     break
 
+        material = float(ws['G289'].value or 0)
+        jasa = float(ws['G290'].value or 0)
+        total = float(ws['G291'].value or 0)
+        cpp = round((odp_8 + odp_16) * 8 / total if total else 0, 4)
+
         summary = {
-            'material': ws['G289'].value or 0,
-            'jasa': ws['G290'].value or 0,
-            'total': ws['G291'].value or 0,
-            'cpp': round((odp_8 + odp_16) * 8 / (ws['G291'].value or 1), 4)
+            'material': material,
+            'jasa': jasa,
+            'total': total,
+            'cpp': cpp
         }
 
         output = BytesIO()
@@ -163,10 +168,10 @@ if submitted:
         st.error(f"Terjadi kesalahan saat memproses: {str(e)}")
 
 # ======================
-# 💾 DOWNLOAD OUTPUT & SUMMARY
+# 📂 DOWNLOAD OUTPUT & SUMMARY
 # ======================
 if st.session_state.boq_state.get('ready', False):
-    st.subheader("📥 Download BOQ")
+    st.subheader("📅 Download BOQ")
     st.download_button(
         label="⬇️ Download File BOQ",
         data=st.session_state.boq_state['excel_data'],
@@ -192,6 +197,5 @@ if st.session_state.boq_state.get('ready', False):
         st.session_state.boq_state = {'ready': False}
         st.rerun()
 
-# Tampilan awal jika belum submit
 if not st.session_state.boq_state['ready']:
     st.info("⬆️ Isi form dan unggah file template BOQ untuk mulai.")

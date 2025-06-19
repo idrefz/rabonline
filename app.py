@@ -1,162 +1,87 @@
 import streamlit as st
 import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from io import BytesIO
 
+# Konfigurasi Aplikasi
+st.set_page_config("Form Input BOQ", layout="centered")
+st.title("📋 Form Input BOQ Otomatis")
+
+# Fungsi untuk koneksi Google Sheets
+def connect_to_gsheet():
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+    client = gspread.authorize(creds)
+    return client
+
 # Inisialisasi session state
-def reset_form():
-    """Reset semua nilai form ke default"""
-    default_values = {
-        'sumber': "ODC",
-        'lop_name': "",
-        'kabel_12': 0.0,
-        'kabel_24': 0.0,
-        'odp_8': 0,
-        'odp_16': 0,
-        'tiang_new': 0,
-        'tiang_existing': 0,
-        'tikungan': 0,
-        'izin': "",
-        'downloaded': False,
-        'show_download': False
-    }
-    for key, value in default_values.items():
-        st.session_state[key] = value
+if 'submitted' not in st.session_state:
+    st.session_state.submitted = False
+    st.session_state.download_ready = False
 
-if 'sumber' not in st.session_state:
-    reset_form()
+# URL spreadsheet Google Sheets
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1Zl0txYzsqslXjGV4Y4mcpVMB-vikTDCauzcLOfbbD5c/edit"
 
-# ==============================================
-# FORM INPUT YANG BENAR
-# ==============================================
-
+# Form Input
 with st.form("boq_form"):
     st.subheader("🔹 Data Proyek")
     col1, col2 = st.columns(2)
     with col1:
-        # PERBAIKAN: Jangan langsung assign ke session state di sini
-        sumber = st.radio(
-            "Sumber Data:", 
-            ["ODC", "ODP"],
-            index=0 if st.session_state.sumber == "ODC" else 1,
-            key='sumber_radio'
-        )
+        sumber = st.radio("Sumber Data:", ["ODC", "ODP"], index=0)
     with col2:
-        lop_name = st.text_input(
-            "Nama LOP (untuk nama file):",
-            value=st.session_state.lop_name,
-            key='lop_name_input'
-        )
+        lop_name = st.text_input("Nama LOP (untuk nama file):")
 
     st.subheader("🔹 Input Kabel")
     col1, col2 = st.columns(2)
     with col1:
-        kabel_12 = st.number_input(
-            "Panjang Kabel 12 Core (meter):",
-            min_value=0.0,
-            value=st.session_state.kabel_12,
-            key='kabel_12_input'
-        )
+        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter):", min_value=0.0, value=0.0)
     with col2:
-        kabel_24 = st.number_input(
-            "Panjang Kabel 24 Core (meter):",
-            min_value=0.0,
-            value=st.session_state.kabel_24,
-            key='kabel_24_input'
-        )
+        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter):", min_value=0.0, value=0.0)
 
     st.subheader("🔹 Input ODP")
     col1, col2 = st.columns(2)
     with col1:
-        odp_8 = st.number_input(
-            "ODP 8 Port:",
-            min_value=0,
-            value=st.session_state.odp_8,
-            key='odp_8_input'
-        )
+        odp_8 = st.number_input("ODP 8 Port:", min_value=0, value=0)
     with col2:
-        odp_16 = st.number_input(
-            "ODP 16 Port:",
-            min_value=0,
-            value=st.session_state.odp_16,
-            key='odp_16_input'
-        )
+        odp_16 = st.number_input("ODP 16 Port:", min_value=0, value=0)
 
     st.subheader("🔹 Input Pendukung")
-    tiang_new = st.number_input(
-        "Tiang Baru:",
-        min_value=0,
-        value=st.session_state.tiang_new,
-        key='tiang_new_input'
-    )
-    tiang_existing = st.number_input(
-        "Tiang Existing:",
-        min_value=0,
-        value=st.session_state.tiang_existing,
-        key='tiang_existing_input'
-    )
-    tikungan = st.number_input(
-        "Jumlah Tikungan:",
-        min_value=0,
-        value=st.session_state.tikungan,
-        key='tikungan_input'
-    )
-    izin = st.text_input(
-        "Nilai Izin (jika ada):",
-        value=st.session_state.izin,
-        key='izin_input'
-    )
+    tiang_new = st.number_input("Tiang Baru:", min_value=0, value=0)
+    tiang_existing = st.number_input("Tiang Existing:", min_value=0, value=0)
+    tikungan = st.number_input("Jumlah Tikungan:", min_value=0, value=0)
+    izin = st.text_input("Nilai Izin (jika ada):", value="")
 
-    # PERBAIKAN UTAMA: Gunakan st.form_submit_button() dengan benar
-    submitted = st.form_submit_button("🚀 Proses BOQ")
-    reset_clicked = st.form_submit_button("🔄 Reset Form")
+    submitted = st.form_submit_button("🚀 Proses dan Update RAB")
 
-# ==============================================
-# PENANGANAN FORM SUBMIT
-# ==============================================
-
-if reset_clicked:
-    reset_form()
-    st.rerun()
-
+# Proses setelah form disubmit
 if submitted:
-    # Simpan nilai input ke session state
-    st.session_state.update({
-        'sumber': sumber,
-        'lop_name': lop_name,
-        'kabel_12': kabel_12,
-        'kabel_24': kabel_24,
-        'odp_8': odp_8,
-        'odp_16': odp_16,
-        'tiang_new': tiang_new,
-        'tiang_existing': tiang_existing,
-        'tikungan': tikungan,
-        'izin': izin
-    })
-    
-    # Validasi input
-    if not st.session_state.lop_name:
+    if not lop_name:
         st.warning("Harap masukkan Nama LOP terlebih dahulu!")
         st.stop()
     
     try:
         # Hitung total ODP
-        total_odp = st.session_state.odp_8 + st.session_state.odp_16
+        total_odp = odp_8 + odp_16
         
         # 1. Perhitungan Volume Kabel
-        if st.session_state.sumber == "ODC":
-            vol_kabel_12 = round((st.session_state.kabel_12 * 1.02) + total_odp) if st.session_state.kabel_12 > 0 else 0
-            vol_kabel_24 = round((st.session_state.kabel_24 * 1.02) + total_odp) if st.session_state.kabel_24 > 0 else 0
+        if sumber == "ODC":
+            vol_kabel_12 = round((kabel_12 * 1.02) + total_odp) if kabel_12 > 0 else 0
+            vol_kabel_24 = round((kabel_24 * 1.02) + total_odp) if kabel_24 > 0 else 0
         else:  # ODP
-            vol_kabel_12 = round(st.session_state.kabel_12 * 1.02) if st.session_state.kabel_12 > 0 else 0
-            vol_kabel_24 = round(st.session_state.kabel_24 * 1.02) if st.session_state.kabel_24 > 0 else 0
+            vol_kabel_12 = round(kabel_12 * 1.02) if kabel_12 > 0 else 0
+            vol_kabel_24 = round(kabel_24 * 1.02) if kabel_24 > 0 else 0
         
         # 2. Perhitungan PU-AS
         vol_puas = (total_odp * 2 - 1) if total_odp > 1 else (1 if total_odp == 1 else 0)
-        vol_puas += st.session_state.tiang_new + st.session_state.tiang_existing + st.session_state.tikungan
+        vol_puas += tiang_new + tiang_existing + tikungan
 
         # 3. Perhitungan OS
-        if st.session_state.sumber == "ODC":
-            os_odc = (12 if st.session_state.kabel_12 > 0 else 24 if st.session_state.kabel_24 > 0 else 0) + total_odp
+        if sumber == "ODC":
+            os_odc = (12 if kabel_12 > 0 else 24 if kabel_24 > 0 else 0) + total_odp
             os_odp = 0
         else:  # ODP
             os_odc = 0
@@ -169,89 +94,70 @@ if submitted:
         pc_apc = 18 if pc_upc == 1 else (pc_upc * 2 if pc_upc > 1 else 0)
 
         # 5. Perhitungan Lainnya
-        tc02 = 1 if st.session_state.sumber == "ODC" else 0
-        dd40 = 6 if st.session_state.sumber == "ODC" else 0
-        bc06 = 6 if st.session_state.sumber == "ODC" else 0
-        ps_odc = (total_odp - 1) // 4 + 1 if st.session_state.sumber == "ODC" and total_odp > 0 else 0
+        tc02 = 1 if sumber == "ODC" else 0
+        dd40 = 6 if sumber == "ODC" else 0
+        bc06 = 6 if sumber == "ODC" else 0
+        ps_odc = (total_odp - 1) // 4 + 1 if sumber == "ODC" and total_odp > 0 else 0
 
-        # Membuat DataFrame hasil
-        designators = []
-        volumes = []
-        
-        def add_item(designator, volume):
-            if volume > 0 or (designator == "Preliminary Project HRB/Kawasan Khusus" and st.session_state.izin):
-                designators.append(designator)
-                volumes.append(volume)
-        
-        # Tambahkan item ke dataframe
-        if st.session_state.kabel_12 > 0:
-            add_item("AC-OF-SM-12-SC_O_STOCK", vol_kabel_12)
-        if st.session_state.kabel_24 > 0:
-            add_item("AC-OF-SM-24-SC_O_STOCK", vol_kabel_24)
-        if st.session_state.odp_8 > 0:
-            add_item("ODP Solid-PB-8 AS", st.session_state.odp_8)
-        if st.session_state.odp_16 > 0:
-            add_item("ODP Solid-PB-16 AS", st.session_state.odp_16)
-        
-        add_item("PU-S7.0-400NM", st.session_state.tiang_new)
-        add_item("PU-AS", vol_puas)
-        
-        if st.session_state.sumber == "ODC":
-            add_item("OS-SM-1-ODC", os_odc)
-            add_item("TC-02-ODC", tc02)
-            add_item("DD-HDPE-40-1", dd40)
-            add_item("BC-TR-0.6", bc06)
-            add_item("PS-1-4-ODC", ps_odc)
-        else:
-            add_item("OS-SM-1-ODP", os_odp)
-        
-        add_item("OS-SM-1", os_total)
-        add_item("PC-UPC-652-2", pc_upc)
-        add_item("PC-APC/UPC-652-A1", pc_apc)
-        
-        if st.session_state.izin:
-            add_item("Preliminary Project HRB/Kawasan Khusus", 1)
-        
-        df = pd.DataFrame({"Designator": designators, "Volume": volumes})
+        # Mapping designator dengan volume
+        items = {
+            "AC-OF-SM-12-SC_O_STOCK": vol_kabel_12 if kabel_12 > 0 else None,
+            "AC-OF-SM-24-SC_O_STOCK": vol_kabel_24 if kabel_24 > 0 else None,
+            "ODP Solid-PB-8 AS": odp_8 if odp_8 > 0 else None,
+            "ODP Solid-PB-16 AS": odp_16 if odp_16 > 0 else None,
+            "PU-S7.0-400NM": tiang_new if tiang_new > 0 else None,
+            "PU-AS": vol_puas,
+            "OS-SM-1-ODC": os_odc if sumber == "ODC" else None,
+            "TC-02-ODC": tc02 if sumber == "ODC" else None,
+            "DD-HDPE-40-1": dd40 if sumber == "ODC" else None,
+            "BC-TR-0.6": bc06 if sumber == "ODC" else None,
+            "PS-1-4-ODC": ps_odc if sumber == "ODC" else None,
+            "OS-SM-1-ODP": os_odp if sumber == "ODP" else None,
+            "OS-SM-1": os_total,
+            "PC-UPC-652-2": pc_upc,
+            "PC-APC/UPC-652-A1": pc_apc,
+            "Preliminary Project HRB/Kawasan Khusus": 1 if izin else None
+        }
 
-        # Tampilkan hasil
-        st.success("✅ Perhitungan BOQ Berhasil!")
-        st.subheader("📊 Hasil Perhitungan BOQ")
-        st.dataframe(df.style.highlight_max(axis=0), use_container_width=True)
-
-        # Tampilkan Total
-        st.subheader("📌 Ringkasan")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Kabel (m)", f"{vol_kabel_12 + vol_kabel_24:,}m")
-        with col2:
-            st.metric("Total ODP", f"{total_odp:,} unit")
-        with col3:
-            st.metric("Total PU-AS", f"{vol_puas:,} unit")
-
-        # Simpan hasil di session state
-        st.session_state.df_result = df
-        st.session_state.show_download = True
-
+        # Koneksi ke Google Sheets
+        client = connect_to_gsheet()
+        spreadsheet = client.open_by_url(SPREADSHEET_URL)
+        sheet = spreadsheet.sheet1
+        
+        # Update nilai di Google Sheets
+        records = sheet.get_all_records()
+        
+        for i, row in enumerate(records, start=2):  # Mulai dari baris 2 (indeks 1)
+            designator = row['Designator']
+            if designator in items and items[designator] is not None:
+                # Update kolom Volume (asumsi kolom volume adalah kolom 2)
+                sheet.update_cell(i, 2, items[designator])
+        
+        st.success("✅ Data berhasil diupdate di RAB Spreadsheet!")
+        
+        # Download file
+        output = BytesIO()
+        spreadsheet.export(format='xlsx', output=output)
+        output.seek(0)
+        
+        st.session_state.download_data = output
+        st.session_state.download_ready = True
+        st.session_state.lop_name = lop_name
+        
     except Exception as e:
-        st.error(f"Terjadi kesalahan saat memproses: {str(e)}")
+        st.error(f"Terjadi kesalahan: {str(e)}")
 
-# ==============================================
-# DOWNLOAD OPTIONS
-# ==============================================
-
-if st.session_state.get('show_download', False):
-    st.subheader("💾 Download Options")
-    
-    # Download hasil BOQ sebagai Excel
-    output_boq = BytesIO()
-    with pd.ExcelWriter(output_boq, engine='openpyxl') as writer:
-        st.session_state.df_result.to_excel(writer, index=False, sheet_name='BOQ')
-    output_boq.seek(0)
-    
+# Tampilkan tombol download jika sudah siap
+if st.session_state.get('download_ready', False):
+    st.subheader("💾 Download RAB Terupdate")
     st.download_button(
-        label="⬇️ Download Hasil BOQ (Excel)",
-        data=output_boq,
-        file_name=f"BOQ_{st.session_state.lop_name}.xlsx",
+        label="⬇️ Download RAB Excel",
+        data=st.session_state.download_data,
+        file_name=f"RAB_{st.session_state.lop_name}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+    
+    if st.button("🔄 Buat Input Baru"):
+        st.session_state.submitted = False
+        st.session_state.download_ready = False
+        st.rerun()

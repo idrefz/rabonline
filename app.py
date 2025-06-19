@@ -20,6 +20,7 @@ if 'downloaded' not in st.session_state:
 
 def reset_form():
     st.session_state.downloaded = False
+    st.session_state.sumber = "ODC"
     st.session_state.kabel_12 = 0.0
     st.session_state.kabel_24 = 0.0 
     st.session_state.odp_8 = 0
@@ -32,13 +33,22 @@ def reset_form():
 
 # Form input
 with st.form("boq_form"):
+    # Pilihan sumber data
+    sumber = st.radio("Sumber Data", ["ODC", "ODP"], key="sumber")
+    
     st.subheader("Input Kabel")
-    kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=0.0, key="kabel_12")
-    kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=0.0, key="kabel_24")
+    col1, col2 = st.columns(2)
+    with col1:
+        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=0.0, key="kabel_12")
+    with col2:
+        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=0.0, key="kabel_24")
     
     st.subheader("Input ODP")
-    odp_8 = st.number_input("Jumlah ODP 8", min_value=0, value=0, key="odp_8")
-    odp_16 = st.number_input("Jumlah ODP 16", min_value=0, value=0, key="odp_16")
+    col1, col2 = st.columns(2)
+    with col1:
+        odp_8 = st.number_input("Jumlah ODP 8", min_value=0, value=0, key="odp_8")
+    with col2:
+        odp_16 = st.number_input("Jumlah ODP 16", min_value=0, value=0, key="odp_16")
     
     st.subheader("Input Lainnya")
     tiang_new = st.number_input("Total Tiang Baru", min_value=0, value=0, key="tiang_new")
@@ -58,9 +68,13 @@ if submitted and not st.session_state.downloaded:
     total_kabel = kabel_12 + kabel_24
     total_odp = odp_8 + odp_16
     
-    # Hitung volume
-    vol_kabel_12 = round((kabel_12 * 1.02) + odp_8 + odp_16) if kabel_12 > 0 else 0
-    vol_kabel_24 = round((kabel_24 * 1.02) + odp_8 + odp_16) if kabel_24 > 0 else 0
+    # Hitung volume kabel dengan sumber data ODC/ODP
+    if sumber == "ODC":
+        vol_kabel_12 = round((kabel_12 * 1.02) + total_odp) if kabel_12 > 0 else 0
+        vol_kabel_24 = round((kabel_24 * 1.02) + total_odp) if kabel_24 > 0 else 0
+    else:  # ODP
+        vol_kabel_12 = round(kabel_12 * 1.02) if kabel_12 > 0 else 0
+        vol_kabel_24 = round(kabel_24 * 1.02) if kabel_24 > 0 else 0
     
     # PU-AS Logic
     if total_odp == 0:
@@ -71,30 +85,48 @@ if submitted and not st.session_state.downloaded:
         vol_puas = (total_odp * 2 - 1)
     vol_puas += tiang_new + tiang_existing + tikungan
 
-    # Buat dataframe hasil
-    data = {
-        "Designator": [
-            "AC-OF-SM-12-SC_O_STOCK" if kabel_12 > 0 else "",
-            "AC-OF-SM-24-SC_O_STOCK" if kabel_24 > 0 else "",
-            "ODP Solid-PB-8 AS" if odp_8 > 0 else "",
-            "ODP Solid-PB-16 AS" if odp_16 > 0 else "",
-            "PU-S7.0-400NM",
-            "PU-AS",
-            "Preliminary Project HRB/Kawasan Khusus" if izin else ""
-        ],
-        "Volume": [
-            vol_kabel_12,
-            vol_kabel_24,
-            odp_8,
-            odp_16,
-            tiang_new,
-            vol_puas,
-            1 if izin else 0
-        ]
-    }
+    # Hitung OS berdasarkan sumber data
+    if sumber == "ODC":
+        os_odc = (12 if kabel_12 > 0 else 24 if kabel_24 > 0 else 0) + total_odp
+        os_odp = 0
+    else:  # ODP
+        os_odc = 0
+        os_odp = total_odp * 2
     
-    df = pd.DataFrame(data)
-    df = df[df["Designator"] != ""]  # Hapus baris kosong
+    os_total = os_odc + os_odp
+
+    # Buat dataframe hasil
+    designators = []
+    volumes = []
+    
+    def add_designator(designator, volume):
+        if volume > 0 or (designator == "Preliminary Project HRB/Kawasan Khusus" and izin):
+            designators.append(designator)
+            volumes.append(volume)
+    
+    if kabel_12 > 0:
+        add_designator("AC-OF-SM-12-SC_O_STOCK", vol_kabel_12)
+    if kabel_24 > 0:
+        add_designator("AC-OF-SM-24-SC_O_STOCK", vol_kabel_24)
+    if odp_8 > 0:
+        add_designator("ODP Solid-PB-8 AS", odp_8)
+    if odp_16 > 0:
+        add_designator("ODP Solid-PB-16 AS", odp_16)
+    
+    add_designator("PU-S7.0-400NM", tiang_new)
+    add_designator("PU-AS", vol_puas)
+    
+    if sumber == "ODC":
+        add_designator("OS-SM-1-ODC", os_odc)
+    else:
+        add_designator("OS-SM-1-ODP", os_odp)
+    
+    add_designator("OS-SM-1", os_total)
+    
+    if izin:
+        add_designator("Preliminary Project HRB/Kawasan Khusus", 1)
+    
+    df = pd.DataFrame({"Designator": designators, "Volume": volumes})
 
     # Update Google Sheet
     sheet = spreadsheet.sheet1
@@ -117,36 +149,38 @@ if submitted and not st.session_state.downloaded:
     # Download Options
     st.subheader("Download Options")
     
-    # 1. Download Hasil BOQ
-    output_boq = BytesIO()
-    with pd.ExcelWriter(output_boq, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='BOQ')
-    output_boq.seek(0)
+    col1, col2 = st.columns(2)
     
-    st.download_button(
-        label="⬇️ Download Hasil BOQ",
-        data=output_boq,
-        file_name=f"BOQ_{lop_name}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    
-    # 2. Download Seluruh Spreadsheet RAB
-    st.markdown("### Download RAB Lengkap")
-    st.warning("File ini akan mendownload seluruh spreadsheet RAB sebagai Excel")
-    
-    if st.button("⬇️ Download Full RAB Spreadsheet"):
-        # Download seluruh spreadsheet
-        output_rab = BytesIO()
-        spreadsheet.export(format='xlsx', output=output_rab)
-        output_rab.seek(0)
+    with col1:
+        # 1. Download Hasil BOQ
+        output_boq = BytesIO()
+        with pd.ExcelWriter(output_boq, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='BOQ')
+        output_boq.seek(0)
         
         st.download_button(
-            label="Klik untuk Download RAB",
-            data=output_rab,
-            file_name=f"RAB_Lengkap_{lop_name}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            on_click=lambda: setattr(st.session_state, 'downloaded', True)
+            label="⬇️ Download Hasil BOQ",
+            data=output_boq,
+            file_name=f"BOQ_{lop_name}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+    
+    with col2:
+        # 2. Download Seluruh Spreadsheet RAB
+        st.warning("Download seluruh RAB spreadsheet")
+        
+        if st.button("⬇️ Download Full RAB"):
+            output_rab = BytesIO()
+            spreadsheet.export(format='xlsx', output=output_rab)
+            output_rab.seek(0)
+            
+            st.download_button(
+                label="Klik untuk Download",
+                data=output_rab,
+                file_name=f"RAB_Lengkap_{lop_name}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                on_click=lambda: setattr(st.session_state, 'downloaded', True)
+            )
 
 # Reset after download
 if st.session_state.downloaded:

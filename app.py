@@ -94,10 +94,10 @@ if st.button("Proses BOQ"):
         if not match.empty:
             volume = match["Volume"].values[0]
             if designator_cell == "Preliminary Project HRB/Kawasan Khusus":
-                sheet.update_cell(i + 1, 6, int(volume))  # Kolom F
-                sheet.update_cell(i + 1, 7, 1)            # Kolom G
-            else:
-                sheet.update_cell(i + 1, 7, int(volume))
+            sheet.update_cell(i + 1, 6, int(volume))  # Kolom F
+            sheet.update_cell(i + 1, 7, 1)            # Kolom G
+        else:
+            sheet.update_cell(i + 1, 7, int(volume))
 
     # Tampilkan tabel hasil BOQ
     st.subheader("Hasil Perhitungan BOQ")

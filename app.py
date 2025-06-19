@@ -15,6 +15,9 @@ sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1Zl0txYzsqslX
 st.set_page_config("Form Input BOQ", layout="centered")
 st.title("📋 Form Input BOQ Otomatis")
 
+# Pilihan sumber data (ODC atau ODP)
+sumber = st.radio("Sumber Data", ["ODC", "ODP"])
+
 # Pilihan Jenis Kabel dan Input Panjang Kabel
 jenis_kabel = st.radio("Pilih Jenis Kabel", ["12 Core", "24 Core"])
 panjang_kabel = st.number_input("Masukkan Panjang Kabel (meter)", min_value=0.0)
@@ -28,7 +31,6 @@ tiang_existing = st.number_input("Total Tiang Existing", min_value=0)
 tikungan = st.number_input("Jumlah Tikungan", min_value=0)
 izin = st.text_input("Nilai Izin (isi jika ada)")
 lop_name = st.text_input("Nama LOP (untuk nama file export)")
-sumber = st.radio("Sumber Data", ["ODC", "ODP"])
 
 if st.button("Proses BOQ"):
     vol_kabel = round((panjang_kabel * 1.02) + total_odp)
@@ -91,7 +93,7 @@ if st.button("Proses BOQ"):
         match = df[df["Designator"] == designator_cell]
         if not match.empty:
             volume = match["Volume"].values[0]
-            sheet.update_cell(i + 1, 7, volume)
+            sheet.update_cell(i + 1, 7, int(volume))
 
     # Tampilkan tabel hasil BOQ
     st.subheader("Hasil Perhitungan BOQ")

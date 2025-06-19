@@ -102,21 +102,18 @@ def calculate_volumes(inputs):
     # Calculate PU-AS volume
     vol_puas = max(0, (total_odp * 2) - 1 + inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan'])
 
-    # Calculate OS-SM-1 volumes based on source
-    vol_os_sm_1_odc = 0
-    vol_base_tray_odc = 0
-    
-    if inputs['sumber'] == "ODC":
-        if inputs['kabel_12'] > 0:
-            vol_os_sm_1_odc = 12 + total_odp
-            vol_base_tray_odc = 1
-        elif inputs['kabel_24'] > 0:
-            vol_os_sm_1_odc = 24 + total_odp
-            vol_base_tray_odc = 2
-
-    # Original calculation for ODP source (unchanged)
+    # Calculate OS-SM-1 volumes based on source (UPDATED as requested)
+    vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
     vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
     vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
+
+    # Calculate Base Tray ODC (unchanged)
+    vol_base_tray_odc = 0
+    if inputs['sumber'] == "ODC":
+        if inputs['kabel_12'] > 0:
+            vol_base_tray_odc = 1
+        elif inputs['kabel_24'] > 0:
+            vol_base_tray_odc = 2
 
     # Calculate connector volumes
     vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0

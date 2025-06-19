@@ -3,13 +3,12 @@ import pandas as pd
 from io import BytesIO
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
-from openpyxl.utils import get_column_letter
 
 # ======================
 # 🎩 CONFIGURATION
 # ======================
 st.set_page_config("BOQ Generator", layout="centered")
-st.title("📊 BOQ Generator (Autofill VOL)")
+st.title("📊 BOQ Generator (Custom Rules)")
 
 # Initialize session state
 if 'boq_state' not in st.session_state:
@@ -20,58 +19,85 @@ if 'boq_state' not in st.session_state:
         'updated_items': []
     }
 
-# Designator to RAB Code Mapping (adjusted for your template)
-RAB_MAP = {
-    "DC-01-01-1111": "DC-01-01-1111",  # AC-OF-SM-12-SC_O_STOCK
-    "DC-01-04-1100": "DC-01-04-1100",  # AC-OF-SM-24-SC_O_STOCK
-    "DC-01-08-4400": "DC-01-08-4400",  # ODP Solid-PB-8 AS
-    "DC-01-04-0400": "DC-01-04-0400",  # ODP Solid-PB-16 AS
-    "DC-01-04-0410": "DC-01-04-0410",  # PU-S7.0-400NM
-    "DC-01-08-4280": "DC-01-08-4280",  # PU-AS
-    "AC-01-04-1100": "AC-01-04-1100",  # OS-SM-1-ODC
-    "AC-01-04-2400": "AC-01-04-2400",  # TC-02-ODC
-    "AC-01-04-0500": "AC-01-04-0500",  # DD-HDPE-40-1
-    "DC-01-04-1420": "DC-01-04-1420",  # BC-TR-0.6
-    "DC-01-04-2420": "DC-01-04-2420",  # PS-1-4-ODC
-    "DC-01-04-2460": "DC-01-04-2460",  # OS-SM-1-ODP
-    "DC-01-04-2480": "DC-01-04-2480",  # OS-SM-1
-    "DC-01-04-2490": "DC-01-04-2490",  # PC-UPC-652-2
-    "DC-01-04-2500": "DC-01-04-2500",  # PC-APC/UPC-652-A1
-    "IZIN-KHUSUS-001": "IZIN-KHUSUS-001"  # Preliminary Project HRB/Kawasan Khusus
-}
-
 # ======================
 # 🔧 CORE FUNCTIONS
 # ======================
 def calculate_volumes(inputs):
-    """Calculate BOQ volumes based on inputs"""
+    """Calculate volumes based on custom rules"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
     
     # Cable calculations
-    vol_kabel_12 = round((inputs['kabel_12'] * 1.02) + (total_odp if inputs['sumber'] == "ODC" else 0)) if inputs['kabel_12'] > 0 else 0
-    vol_kabel_24 = round((inputs['kabel_24'] * 1.02) + (total_odp if inputs['sumber'] == "ODC" else 0)) if inputs['kabel_24'] > 0 else 0
+    vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
+    vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
     
-    # Support calculations
-    vol_puas = (total_odp * 2 - 1) if total_odp > 1 else (1 if total_odp == 1 else 0)
+    # PU-AS calculation
+    if total_odp == 0:
+        vol_puas = 0
+    elif total_odp == 1:
+        vol_puas = 1
+    else:
+        vol_puas = (total_odp * 2) - 1
     vol_puas += inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan']
     
+    # OS-SM-1-ODC calculation
+    if inputs['sumber'] == "ODC":
+        if inputs['kabel_12'] > 0:
+            vol_os_sm_1_odc = 12 + total_odp
+        elif inputs['kabel_24'] > 0:
+            vol_os_sm_1_odc = 24 + total_odp
+        else:
+            vol_os_sm_1_odc = 0
+    else:
+        vol_os_sm_1_odc = 0
+    
+    # OS-SM-1-ODP calculation
+    vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
+    
+    # OS-SM-1 calculation
+    vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
+    
+    # PC-UPC-652-2 calculation
+    if total_odp == 0:
+        vol_pc_upc = 0
+    else:
+        vol_pc_upc = ((total_odp - 1) // 4) + 1
+    
+    # PC-APC/UPC-652-A1 calculation
+    if vol_pc_upc == 1:
+        vol_pc_apc = 18
+    elif vol_pc_upc > 1:
+        vol_pc_apc = vol_pc_upc * 2
+    else:
+        vol_pc_apc = 0
+    
+    # PS-1-4-ODC calculation
+    if inputs['sumber'] == "ODC" and total_odp > 0:
+        vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1
+    else:
+        vol_ps_1_4_odc = 0
+    
+    # Other items
+    vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
+    vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
+    vol_bc_tr = 6 if inputs['sumber'] == "ODC" else 0
+    
     return [
-        {"designator": "DC-01-01-1111", "volume": vol_kabel_12},  # 12 Core
-        {"designator": "DC-01-04-1100", "volume": vol_kabel_24},  # 24 Core
-        {"designator": "DC-01-08-4400", "volume": inputs['odp_8']},  # ODP 8
-        {"designator": "DC-01-04-0400", "volume": inputs['odp_16']},  # ODP 16
-        {"designator": "DC-01-04-0410", "volume": inputs['tiang_new']},  # New Poles
-        {"designator": "DC-01-08-4280", "volume": vol_puas},  # PU-AS
-        {"designator": "AC-01-04-1100", "volume": (12 if inputs['kabel_12'] > 0 else 24 if inputs['kabel_24'] > 0 else 0) + total_odp if inputs['sumber'] == "ODC" else 0},  # OS-SM-1-ODC
-        {"designator": "AC-01-04-2400", "volume": 1 if inputs['sumber'] == "ODC" else 0},  # TC-02-ODC
-        {"designator": "AC-01-04-0500", "volume": 6 if inputs['sumber'] == "ODC" else 0},  # DD-HDPE-40-1
-        {"designator": "DC-01-04-1420", "volume": 6 if inputs['sumber'] == "ODC" else 0},  # BC-TR-0.6
-        {"designator": "DC-01-04-2420", "volume": (total_odp - 1) // 4 + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0},  # PS-1-4-ODC
-        {"designator": "DC-01-04-2460", "volume": total_odp * 2 if inputs['sumber'] == "ODP" else 0},  # OS-SM-1-ODP
-        {"designator": "DC-01-04-2480", "volume": ((12 if inputs['kabel_12'] > 0 else 24 if inputs['kabel_24'] > 0 else 0) + total_odp) if inputs['sumber'] == "ODC" else (total_odp * 2)},  # OS-SM-1
-        {"designator": "DC-01-04-2490", "volume": (total_odp - 1) // 4 + 1 if total_odp > 0 else 0},  # PC-UPC-652-2
-        {"designator": "DC-01-04-2500", "volume": 18 if ((total_odp - 1) // 4 + 1) == 1 else (((total_odp - 1) // 4 + 1) * 2 if ((total_odp - 1) // 4 + 1) > 1 else 0)},  # PC-APC/UPC-652-A1
-        {"designator": "IZIN-KHUSUS-001", "volume": 1 if inputs['izin'] else 0}  # Izin Khusus
+        {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
+        {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
+        {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
+        {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
+        {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
+        {"designator": "PU-AS", "volume": vol_puas},
+        {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
+        {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
+        {"designator": "OS-SM-1", "volume": vol_os_sm_1},
+        {"designator": "PC-UPC-652-2", "volume": vol_pc_upc},
+        {"designator": "PC-APC/UPC-652-A1", "volume": vol_pc_apc},
+        {"designator": "PS-1-4-ODC", "volume": vol_ps_1_4_odc},
+        {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
+        {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
+        {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
+        {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if inputs['izin'] else 0}
     ]
 
 # ======================
@@ -81,10 +107,10 @@ with st.form("boq_form"):
     st.subheader("📋 Project Information")
     col1, col2 = st.columns(2)
     with col1:
-        sumber = st.selectbox("Source Type:", ["ODC", "ODP"], index=0)
-        project_name = st.text_input("Project Name:")
+        sumber = st.radio("Source Type:", ["ODC", "ODP"], index=0)
     with col2:
         lop_name = st.text_input("LOP Name:")
+        project_name = st.text_input("Project Name:")
         sto_code = st.text_input("STO Code:")
 
     st.subheader("📡 Cable Inputs")
@@ -110,7 +136,7 @@ with st.form("boq_form"):
     with col3:
         tikungan = st.number_input("Bends:", min_value=0, value=0)
     
-    izin = st.text_input("Special Permit (IZIN-KHUSUS-001):", value="")
+    izin = st.text_input("Special Permit (if any):", value="")
     
     uploaded_file = st.file_uploader("Upload BOQ Template", type=["xlsx", "xls"])
 
@@ -134,7 +160,7 @@ if submitted:
         wb = openpyxl.load_workbook(uploaded_file)
         ws = wb.active
         
-        # Update project info (rows 1-4)
+        # Update project info
         ws['B1'] = "DAFTAR HARGA SATUAN"
         ws['B2'] = "PENGADAAN DAN PEMASANGAN GRANULAR MODERNIZATION"
         ws['B3'] = f"PROJECT : {project_name}"
@@ -161,9 +187,9 @@ if submitted:
         for row in range(9, 289):  # From row 9 to 288
             designator = str(ws[f'B{row}'].value or "").strip()
             
-            # Special handling for permit (add to first empty row if needed)
+            # Special handling for permit
             if not special_permit_added and izin and row > 9 and not ws[f'B{row}'].value:
-                ws[f'B{row}'] = "IZIN-KHUSUS-001"
+                ws[f'B{row}'] = "Preliminary Project HRB/Kawasan Khusus"
                 ws[f'F{row}'] = izin  # Special permit value in column F
                 ws[f'G{row}'] = 1     # Volume 1 in column G
                 special_permit_added = True
@@ -189,10 +215,10 @@ if submitted:
             'updated_items': [item for item in items if item['volume'] > 0]
         }
         
-        st.success(f"✅ Successfully updated {updated_count} items in columns B9:G288!")
+        st.success(f"✅ Successfully updated {updated_count} items!")
         
         # Show updated items
-        with st.expander("📋 Updated Items Preview"):
+        with st.expander("📋 Updated Items"):
             st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
             
     except Exception as e:

@@ -82,12 +82,30 @@ def calculate_volumes(inputs):
 # ======================
 # 🗅️ FORM UI
 # ======================
+def reset_form():
+    st.session_state.boq_state = {
+        'ready': False,
+        'excel_data': None,
+        'project_name': "",
+        'updated_items': [],
+        'summary': {}
+    }
+    # Reset form inputs
+    st.session_state.kabel_12 = 0.0
+    st.session_state.kabel_24 = 0.0
+    st.session_state.odp_8 = 0
+    st.session_state.odp_16 = 0
+    st.session_state.tiang_new = 0
+    st.session_state.tiang_existing = 0
+    st.session_state.tikungan = 0
+    st.session_state.izin = ""
+
 with st.form("boq_form"):
     col1, col2 = st.columns([2, 1])
     with col1:
-        lop_name = st.text_input("Nama LOP")
+        lop_name = st.text_input("Nama LOP", key="lop_name")
     with col2:
-        sumber = st.radio("Sumber", ["ODC", "ODP"], index=0)
+        sumber = st.radio("Sumber", ["ODC", "ODP"], index=0, key="sumber")
 
     kabel_12 = st.number_input("12 Core Cable (m)", min_value=0.0, value=0.0, key="kabel_12")
     kabel_24 = st.number_input("24 Core Cable (m)", min_value=0.0, value=0.0, key="kabel_24")
@@ -97,8 +115,8 @@ with st.form("boq_form"):
     tiang_existing = st.number_input("Tiang Eksisting", min_value=0, value=0, key="tiang_existing")
     tikungan = st.number_input("Tikungan", min_value=0, value=0, key="tikungan")
 
-    izin = st.text_input("Preliminary (isi nominal jika ada)", value="")
-    uploaded_file = st.file_uploader("Unggah Template BOQ", type=["xlsx"])
+    izin = st.text_input("Preliminary (isi nominal jika ada)", value="", key="izin")
+    uploaded_file = st.file_uploader("Unggah Template BOQ", type=["xlsx"], key="uploaded_file")
     submitted = st.form_submit_button("🚀 Generate BOQ")
 
 if submitted:
@@ -159,9 +177,17 @@ if submitted:
 
         total = material + jasa
         total_odp = odp_8 + odp_16
-        cpp = round((total_odp * 8 / total), 4) if total else 0
+        # Fixed CPP calculation - now showing cost per port
+        cpp = round((total / (total_odp * 8)), 2) if (total_odp * 8) > 0 else 0
 
-        summary = {'material': material, 'jasa': jasa, 'total': total, 'cpp': cpp}
+        summary = {
+            'material': material,
+            'jasa': jasa,
+            'total': total,
+            'cpp': cpp,
+            'total_odp': total_odp,
+            'total_ports': total_odp * 8
+        }
 
         output = BytesIO()
         wb.save(output)
@@ -198,14 +224,15 @@ if st.session_state.boq_state.get('ready', False):
     col1.metric("MATERIAL", f"Rp {summary.get('material', 0):,.0f}")
     col2.metric("JASA", f"Rp {summary.get('jasa', 0):,.0f}")
     col3.metric("TOTAL", f"Rp {summary.get('total', 0):,.0f}")
-    col4.metric("CPP", f"{summary.get('cpp', 0):.4f}")
+    col4.metric("CPP (per port)", f"Rp {summary.get('cpp', 0):,.0f}")
+    
+    st.caption(f"Total ODP: {summary.get('total_odp', 0)}")
+    st.caption(f"Total Ports: {summary.get('total_ports', 0)}")
 
     st.subheader("📋 Item Terupdate")
     st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
 
-    if st.button("🔄 Buat BOQ Baru"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+    if st.button("🔄 Buat BOQ Baru", on_click=reset_form):
         st.rerun()
 else:
     st.info("⬆️ Isi form dan unggah template untuk memulai.")

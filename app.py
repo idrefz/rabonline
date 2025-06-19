@@ -1,54 +1,6 @@
 import streamlit as st
 import pandas as pd
-import sys
-import subprocess
-import pkg_resources
 from io import BytesIO
-
-# ==============================================
-# FUNGSI UTAMA DAN DEPENDENCIES
-# ==============================================
-
-def check_dependencies():
-    """Memeriksa dan menginstall dependencies yang diperlukan"""
-    required = {
-        'google-api-python-client',
-        'gspread', 
-        'oauth2client',
-        'pandas',
-        'streamlit'
-    }
-    
-    installed = {pkg.key for pkg in pkg_resources.working_set}
-    missing = required - installed
-    
-    if missing:
-        st.warning(f"Modul yang diperlukan belum terinstall: {missing}")
-        if st.button("Install Modul yang Hilang"):
-            for package in missing:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-            st.success("Modul berhasil diinstall! Silakan refresh halaman.")
-            st.stop()
-
-# Panggil fungsi cek dependencies
-check_dependencies()
-
-# Import modul setelah dependencies terpenuhi
-try:
-    import gspread
-    from oauth2client.service_account import ServiceAccountCredentials
-    from googleapiclient.discovery import build
-    from googleapiclient.errors import HttpError
-except ImportError as e:
-    st.error(f"Gagal mengimport modul: {str(e)}")
-    st.stop()
-
-# ==============================================
-# KONFIGURASI AWAL
-# ==============================================
-
-st.set_page_config("Form Input BOQ", layout="centered")
-st.title("📋 Form Input BOQ Otomatis")
 
 # Inisialisasi session state
 def reset_form():
@@ -71,21 +23,21 @@ if 'sumber' not in st.session_state:
     reset_form()
 
 # ==============================================
-# FORM INPUT
+# FORM INPUT DENGAN SUBMIT BUTTON YANG BENAR
 # ==============================================
 
 with st.form("boq_form"):
     st.subheader("🔹 Data Proyek")
     col1, col2 = st.columns(2)
     with col1:
-        st.radio(
+        st.session_state.sumber = st.radio(
             "Sumber Data:", 
             ["ODC", "ODP"],
             index=0,
             key='sumber'
         )
     with col2:
-        st.text_input(
+        st.session_state.lop_name = st.text_input(
             "Nama LOP (untuk nama file):",
             key='lop_name'
         )
@@ -93,14 +45,14 @@ with st.form("boq_form"):
     st.subheader("🔹 Input Kabel")
     col1, col2 = st.columns(2)
     with col1:
-        st.number_input(
+        st.session_state.kabel_12 = st.number_input(
             "Panjang Kabel 12 Core (meter):",
             min_value=0.0,
             value=st.session_state.kabel_12,
             key='kabel_12'
         )
     with col2:
-        st.number_input(
+        st.session_state.kabel_24 = st.number_input(
             "Panjang Kabel 24 Core (meter):",
             min_value=0.0,
             value=st.session_state.kabel_24,
@@ -110,14 +62,14 @@ with st.form("boq_form"):
     st.subheader("🔹 Input ODP")
     col1, col2 = st.columns(2)
     with col1:
-        st.number_input(
+        st.session_state.odp_8 = st.number_input(
             "ODP 8 Port:",
             min_value=0,
             value=st.session_state.odp_8,
             key='odp_8'
         )
     with col2:
-        st.number_input(
+        st.session_state.odp_16 = st.number_input(
             "ODP 16 Port:",
             min_value=0,
             value=st.session_state.odp_16,
@@ -125,30 +77,31 @@ with st.form("boq_form"):
         )
 
     st.subheader("🔹 Input Pendukung")
-    st.number_input(
+    st.session_state.tiang_new = st.number_input(
         "Tiang Baru:",
         min_value=0,
         value=st.session_state.tiang_new,
         key='tiang_new'
     )
-    st.number_input(
+    st.session_state.tiang_existing = st.number_input(
         "Tiang Existing:",
         min_value=0,
         value=st.session_state.tiang_existing,
         key='tiang_existing'
     )
-    st.number_input(
+    st.session_state.tikungan = st.number_input(
         "Jumlah Tikungan:",
         min_value=0,
         value=st.session_state.tikungan,
         key='tikungan'
     )
-    st.text_input(
+    st.session_state.izin = st.text_input(
         "Nilai Izin (jika ada):",
         value=st.session_state.izin,
         key='izin'
     )
 
+    # PERBAIKAN UTAMA: Gunakan st.form_submit_button() yang benar
     col1, col2 = st.columns(2)
     with col1:
         submitted = st.form_submit_button("🚀 Proses BOQ")
@@ -266,83 +219,3 @@ if submitted:
 
     except Exception as e:
         st.error(f"Terjadi kesalahan saat memproses: {str(e)}")
-
-# ==============================================
-# DOWNLOAD OPTIONS
-# ==============================================
-
-if st.session_state.get('show_download', False):
-    st.subheader("💾 Download Options")
-    
-    tab1, tab2 = st.tabs(["Download Hasil BOQ", "Download Full RAB"])
-
-    with tab1:
-        # Download hasil BOQ sebagai Excel
-        output_boq = BytesIO()
-        with pd.ExcelWriter(output_boq, engine='openpyxl') as writer:
-            st.session_state.df_result.to_excel(writer, index=False, sheet_name='BOQ')
-        output_boq.seek(0)
-        
-        st.download_button(
-            label="⬇️ Download Hasil BOQ (Excel)",
-            data=output_boq,
-            file_name=f"BOQ_{st.session_state.lop_name}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    with tab2:
-        st.info("Download seluruh file RAB spreadsheet dari Google Sheets")
-        
-        if st.button("⬇️ Generate Full RAB Spreadsheet"):
-            with st.spinner("Mempersiapkan file. Harap tunggu..."):
-                try:
-                    # Inisialisasi Google Drive API
-                    scope = ['https://www.googleapis.com/auth/drive']
-                    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-                        st.secrets["gcp_service_account"],
-                        scopes=scope
-                    )
-                    drive_service = build('drive', 'v3', credentials=creds)
-                    
-                    # Download file
-                    request = drive_service.files().export_media(
-                        fileId='1Zl0txYzsqslXjGV4Y4mcpVMB-vikTDCauzcLOfbbD5c',
-                        mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                    )
-                    
-                    output_rab = BytesIO()
-                    downloader = MediaIoBaseDownload(output_rab, request)
-                    
-                    progress_bar = st.progress(0)
-                    done = False
-                    while not done:
-                        status, done = downloader.next_chunk()
-                        progress_bar.progress(int(status.progress() * 100))
-                    
-                    output_rab.seek(0)
-                    
-                    st.session_state.downloaded = True
-                    st.success("File siap diunduh!")
-                    
-                    st.download_button(
-                        label="💾 Klik untuk Download RAB Lengkap",
-                        data=output_rab,
-                        file_name=f"RAB_Lengkap_{st.session_state.lop_name}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                    
-                except HttpError as error:
-                    st.error(f"Google API error: {error}")
-                except Exception as e:
-                    st.error(f"Terjadi kesalahan: {str(e)}")
-
-# ==============================================
-# RESET FORM SETELAH DOWNLOAD
-# ==============================================
-
-if st.session_state.get('downloaded', False):
-    st.success("🎉 File telah berhasil diunduh!")
-    if st.button("🔄 Buat Input Baru"):
-        reset_form()
-        st.session_state.show_download = False
-        st.rerun()

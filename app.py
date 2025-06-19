@@ -3,10 +3,12 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from io import BytesIO
+import json
 
-# Setup Google Sheets
+# Load credentials dari secrets
 scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
-creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+creds_dict = st.secrets["gcp_service_account"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1Zl0txYzsqslXjGV4Y4mcpVMB-vikTDCauzcLOfbbD5c/edit").sheet1
 

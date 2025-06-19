@@ -24,12 +24,6 @@ st.markdown("""
         .metric .st-emotion-cache-1xarl3l {
             font-size: 1.2rem !important;
         }
-        .recommendation {
-            background-color: #f0f2f6;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 10px;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -61,8 +55,7 @@ def initialize_session_state():
             'excel_data': None,
             'project_name': "",
             'updated_items': [],
-            'summary': {},
-            'recommended_poles': 0
+            'summary': {}
         }
 
 def reset_application():
@@ -85,8 +78,7 @@ def reset_application():
         'excel_data': None,
         'project_name': "",
         'updated_items': [],
-        'summary': {},
-        'recommended_poles': 0
+        'summary': {}
     }
 
 # Initialize the application
@@ -104,24 +96,18 @@ def calculate_volumes(inputs):
         raise ValueError("Silakan pilih hanya satu jenis kabel (12-core ATAU 24-core)")
 
     # Calculate cable volumes with 2% overhead
-    total_kabel = inputs['kabel_12'] if inputs['kabel_12'] > 0 else inputs['kabel_24']
     vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
     vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
     
-    # Calculate recommended poles
-    jarak_antar_tiang = 45  # dalam meter
-    recommended_poles = (total_kabel // jarak_antar_tiang) + 1 + inputs['tikungan']
-    st.session_state.boq_state['recommended_poles'] = recommended_poles
-
     # Calculate PU-AS volume
     vol_puas = max(0, (total_odp * 2) - 1 + inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan'])
 
-    # Calculate OS-SM-1 volumes based on source
+    # Calculate OS-SM-1 volumes based on source (UPDATED as requested)
     vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
     vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
     vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
 
-    # Calculate Base Tray ODC
+    # Calculate Base Tray ODC (unchanged)
     vol_base_tray_odc = 0
     if inputs['sumber'] == "ODC":
         if inputs['kabel_12'] > 0:
@@ -164,6 +150,10 @@ def calculate_volumes(inputs):
 def process_boq_template(uploaded_file, inputs, lop_name):
     """Process the BOQ template file and calculate all metrics"""
     try:
+        # Validate inputs
+        if inputs['kabel_12'] > 0 and inputs['kabel_24'] > 0:
+            raise ValueError("Silakan pilih hanya satu jenis kabel (12-core ATAU 24-core)")
+
         wb = openpyxl.load_workbook(uploaded_file)
         ws = wb.active
         items = calculate_volumes(inputs)
@@ -224,8 +214,7 @@ def process_boq_template(uploaded_file, inputs, lop_name):
                 'total': total,
                 'cpp': cpp,
                 'total_odp': total_odp,
-                'total_ports': total_odp * 8,
-                'recommended_poles': st.session_state.boq_state['recommended_poles']
+                'total_ports': total_odp * 8
             },
             'updated_items': [item for item in items if item['volume'] > 0]
         }
@@ -273,35 +262,18 @@ with st.form("boq_form"):
             value=st.session_state.form_values['odp_8'],
             key='odp_8_input'
         )
-        
-        tikungan = st.number_input(
-            "Tikungan*",
-            min_value=0,
-            value=st.session_state.form_values['tikungan'],
-            key='tikungan_input',
-            help="Setiap belokan menambah 1 tiang"
-        )
-        
-        # Calculate recommended poles
-        recommended_poles = 0
-        if kabel_12 > 0 or kabel_24 > 0:
-            total_kabel = kabel_12 if kabel_12 > 0 else kabel_24
-            recommended_poles = (total_kabel // 45) + 1 + tikungan
-            st.markdown(f"""
-                <div class="recommendation">
-                    🔍 <strong>Rekomendasi Tiang:</strong> {recommended_poles} 
-                    <br>(45m per tiang + 1 tiang dasar + {tikungan} tikungan)
-                </div>
-            """, unsafe_allow_html=True)
-        
         tiang_new = st.number_input(
             "Tiang Baru*",
             min_value=0,
             value=st.session_state.form_values['tiang_new'],
-            key='tiang_new_input',
-            help=f"Rekomendasi: {recommended_poles} tiang" if (kabel_12 > 0 or kabel_24 > 0) else ""
+            key='tiang_new_input'
         )
-        
+        tikungan = st.number_input(
+            "Tikungan*",
+            min_value=0,
+            value=st.session_state.form_values['tikungan'],
+            key='tikungan_input'
+        )
     with col2:
         kabel_24 = st.number_input(
             "24 Core Cable (meter)*",
@@ -338,7 +310,6 @@ with st.form("boq_form"):
         help="File template Excel format BOQ"
     )
 
-    # PROPER SUBMIT BUTTON IMPLEMENTATION
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
 # ======================
@@ -423,14 +394,6 @@ if st.session_state.boq_state.get('ready', False):
     with col3:
         st.metric("Total Biaya", f"Rp {summary['total']:,.0f}")
         st.metric("CPP (Cost Per Port)", f"Rp {summary['cpp']:,.0f}")
-    
-    # Show pole recommendation in results
-    st.markdown(f"""
-        <div class="recommendation">
-            📌 <strong>Rekomendasi Tiang:</strong> {summary['recommended_poles']} 
-            (45m per tiang + 1 tiang dasar + {st.session_state.form_values['tikungan']} tikungan)
-        </div>
-    """, unsafe_allow_html=True)
 
     # Updated Items
     st.subheader("📋 Item yang Diupdate")

@@ -9,7 +9,6 @@ import openpyxl
 st.set_page_config("BOQ Generator", layout="centered")
 st.title("📊 BOQ Generator (Custom Rules)")
 
-# Initialize session state
 if 'boq_state' not in st.session_state:
     st.session_state.boq_state = {
         'ready': False,
@@ -133,17 +132,16 @@ if submitted:
                     updated_count += 1
                     break
 
-        # Calculation of material and jasa
         material = 0.0
         jasa = 0.0
         for row in range(9, 289):
-            harga_material = ws[f'E{row}'].value
-            harga_jasa = ws[f'F{row}'].value
-            volume = ws[f'G{row}'].value
             try:
-                harga_material = float(harga_material) if harga_material is not None else 0.0
-                harga_jasa = float(harga_jasa) if harga_jasa is not None else 0.0
-                volume = float(volume) if volume is not None else 0.0
+                harga_material = ws[f'E{row}'].value
+                harga_jasa = ws[f'F{row}'].value
+                volume = ws[f'G{row}'].value
+                harga_material = float(harga_material) if harga_material and not isinstance(harga_material, str) or harga_material.replace('.', '', 1).isdigit() else 0
+                harga_jasa = float(harga_jasa) if harga_jasa and not isinstance(harga_jasa, str) or harga_jasa.replace('.', '', 1).isdigit() else 0
+                volume = float(volume) if volume else 0.0
                 material += harga_material * volume
                 jasa += harga_jasa * volume
             except:
@@ -201,7 +199,8 @@ if st.session_state.boq_state.get('ready', False):
     st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
 
     if st.button("🔄 Buat BOQ Baru"):
-        st.session_state.clear()
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.experimental_rerun()
 
 if not st.session_state.boq_state['ready']:

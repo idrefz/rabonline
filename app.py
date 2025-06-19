@@ -31,7 +31,7 @@ def reset_form():
     st.session_state.izin = ""
     st.session_state.lop_name = ""
 
-# Initialize all fields to empty/zero if not already in session state
+# Initialize all fields if not already in session state
 if 'sumber' not in st.session_state:
     reset_form()
 
@@ -39,32 +39,41 @@ if 'sumber' not in st.session_state:
 with st.form("boq_form"):
     # Section 1: Sumber Data (ODC/ODP)
     st.subheader("🔹 Sumber Data")
-    sumber = st.radio("Pilih Sumber Data:", ["ODC", "ODP"], key="sumber", 
+    sumber = st.radio("Pilih Sumber Data:", ["ODC", "ODP"], index=0, 
                      help="Pilihan ini akan mempengaruhi perhitungan kabel, OS, dan komponen lainnya")
     
     # Section 2: Input Kabel
     st.subheader("🔹 Input Kabel")
     col1, col2 = st.columns(2)
     with col1:
-        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=st.session_state.kabel_12, key="kabel_12")
+        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, 
+                                  value=float(st.session_state.kabel_12))
     with col2:
-        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=st.session_state.kabel_24, key="kabel_24")
+        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, 
+                                  value=float(st.session_state.kabel_24))
     
     # Section 3: Input ODP
     st.subheader("🔹 Input ODP")
     col1, col2 = st.columns(2)
     with col1:
-        odp_8 = st.number_input("Jumlah ODP 8", min_value=0, value=st.session_state.odp_8, key="odp_8")
+        odp_8 = st.number_input("Jumlah ODP 8", min_value=0, 
+                               value=int(st.session_state.odp_8))
     with col2:
-        odp_16 = st.number_input("Jumlah ODP 16", min_value=0, value=st.session_state.odp_16, key="odp_16")
+        odp_16 = st.number_input("Jumlah ODP 16", min_value=0, 
+                                value=int(st.session_state.odp_16))
     
     # Section 4: Input Pendukung
     st.subheader("🔹 Input Pendukung")
-    tiang_new = st.number_input("Total Tiang Baru", min_value=0, value=st.session_state.tiang_new, key="tiang_new")
-    tiang_existing = st.number_input("Total Tiang Existing", min_value=0, value=st.session_state.tiang_existing, key="tiang_existing")
-    tikungan = st.number_input("Jumlah Tikungan", min_value=0, value=st.session_state.tikungan, key="tikungan")
-    izin = st.text_input("Nilai Izin (isi jika ada)", value=st.session_state.izin, key="izin")
-    lop_name = st.text_input("Nama LOP (untuk nama file export)", value=st.session_state.lop_name, key="lop_name")
+    tiang_new = st.number_input("Total Tiang Baru", min_value=0, 
+                               value=int(st.session_state.tiang_new))
+    tiang_existing = st.number_input("Total Tiang Existing", min_value=0, 
+                                    value=int(st.session_state.tiang_existing))
+    tikungan = st.number_input("Jumlah Tikungan", min_value=0, 
+                              value=int(st.session_state.tikungan))
+    izin = st.text_input("Nilai Izin (isi jika ada)", 
+                         value=st.session_state.izin)
+    lop_name = st.text_input("Nama LOP (untuk nama file export)", 
+                             value=st.session_state.lop_name)
     
     submitted = st.form_submit_button("🚀 Proses BOQ")
     reset_button = st.form_submit_button("🔄 Reset Form")
@@ -74,6 +83,17 @@ if reset_button:
     st.rerun()
 
 if submitted and not st.session_state.downloaded:
+    # Update session state with current values
+    st.session_state.kabel_12 = kabel_12
+    st.session_state.kabel_24 = kabel_24
+    st.session_state.odp_8 = odp_8
+    st.session_state.odp_16 = odp_16
+    st.session_state.tiang_new = tiang_new
+    st.session_state.tiang_existing = tiang_existing
+    st.session_state.tikungan = tikungan
+    st.session_state.izin = izin
+    st.session_state.lop_name = lop_name
+    
     if not lop_name:
         st.warning("Harap masukkan Nama LOP terlebih dahulu!")
         st.stop()
@@ -83,8 +103,8 @@ if submitted and not st.session_state.downloaded:
     
     # 1. PERHITUNGAN VOLUME KABEL
     if sumber == "ODC":
-        vol_kabel_12 = round((kabel_12 * 1.02) + total_odp) if kabel_12 > 0 else 0
-        vol_kabel_24 = round((kabel_24 * 1.02) + total_odp) if kabel_24 > 0 else 0
+        vol_kabel_12 = round((kabel_12 * 1.02) + total_odp if kabel_12 > 0 else 0)
+        vol_kabel_24 = round((kabel_24 * 1.02) + total_odp if kabel_24 > 0 else 0)
     else:  # ODP
         vol_kabel_12 = round(kabel_12 * 1.02) if kabel_12 > 0 else 0
         vol_kabel_24 = round(kabel_24 * 1.02) if kabel_24 > 0 else 0
@@ -93,7 +113,7 @@ if submitted and not st.session_state.downloaded:
     vol_puas = (total_odp * 2 - 1) if total_odp > 1 else (1 if total_odp == 1 else 0)
     vol_puas += tiang_new + tiang_existing + tikungan
 
-    # 3. PERHITUNGAN OS
+    # 3. PERHITUNGAN OS (Optical Splitter)
     if sumber == "ODC":
         os_odc = (12 if kabel_12 > 0 else 24 if kabel_24 > 0 else 0) + total_odp
         os_odp = 0
@@ -103,7 +123,7 @@ if submitted and not st.session_state.downloaded:
     
     os_total = os_odc + os_odp
 
-    # 4. PERHITUNGAN PC
+    # 4. PERHITUNGAN PC (Patch Cord)
     pc_upc = (total_odp - 1) // 4 + 1 if total_odp > 0 else 0
     pc_apc = 18 if pc_upc == 1 else (pc_upc * 2 if pc_upc > 1 else 0)
 
@@ -197,8 +217,7 @@ if submitted and not st.session_state.downloaded:
             label="⬇️ Download Hasil BOQ (Excel)",
             data=output_boq,
             file_name=f"BOQ_{lop_name}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="Download hasil perhitungan BOQ dalam format Excel"
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     
     with tab2:

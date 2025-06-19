@@ -1,64 +1,61 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+import sys
+import subprocess
+import pkg_resources
 from io import BytesIO
-from urllib.parse import urlparse
 
-# Konfigurasi Aplikasi
+# ==============================================
+# FUNGSI UTAMA DAN DEPENDENCIES
+# ==============================================
+
+def check_dependencies():
+    """Memeriksa dan menginstall dependencies yang diperlukan"""
+    required = {
+        'google-api-python-client',
+        'gspread', 
+        'oauth2client',
+        'pandas',
+        'streamlit'
+    }
+    
+    installed = {pkg.key for pkg in pkg_resources.working_set}
+    missing = required - installed
+    
+    if missing:
+        st.warning(f"Modul yang diperlukan belum terinstall: {missing}")
+        if st.button("Install Modul yang Hilang"):
+            for package in missing:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+            st.success("Modul berhasil diinstall! Silakan refresh halaman.")
+            st.stop()
+
+# Panggil fungsi cek dependencies
+check_dependencies()
+
+# Import modul setelah dependencies terpenuhi
+try:
+    import gspread
+    from oauth2client.service_account import ServiceAccountCredentials
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+except ImportError as e:
+    st.error(f"Gagal mengimport modul: {str(e)}")
+    st.stop()
+
+# ==============================================
+# KONFIGURASI AWAL
+# ==============================================
+
 st.set_page_config("Form Input BOQ", layout="centered")
 st.title("📋 Form Input BOQ Otomatis")
 
-# 1. FUNGSI INISIALISASI ======================================================
-
-def init_google_services():
-    """Inisialisasi koneksi ke Google Sheets dan Drive API"""
-    try:
-        # Scope yang diperlukan
-        scope = [
-            'https://spreadsheets.google.com/feeds',
-            'https://www.googleapis.com/auth/drive',
-            'https://www.googleapis.com/auth/spreadsheets'
-        ]
-        
-        # Load credentials dari secrets Streamlit
-        creds_dict = st.secrets["gcp_service_account"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        
-        # Inisialisasi klien
-        gc = gspread.authorize(creds)
-        drive_service = build('drive', 'v3', credentials=creds)
-        
-        return gc, drive_service
-    except Exception as e:
-        st.error(f"Gagal menginisialisasi Google Services: {str(e)}")
-        st.stop()
-
-# Inisialisasi koneksi
-gc, drive_service = init_google_services()
-
-# 2. FUNGSI UTILITAS =========================================================
-
-def extract_sheet_id(url):
-    """Ekstrak ID spreadsheet dari URL"""
-    try:
-        parsed = urlparse(url)
-        if 'docs.google.com' in parsed.netloc:
-            path_parts = parsed.path.split('/')
-            if 'd' in path_parts:
-                return path_parts[path_parts.index('d')+1]
-        return url.split('/d/')[1].split('/')[0]
-    except:
-        st.error("Format URL tidak valid")
-        return None
-
+# Inisialisasi session state
 def reset_form():
     """Reset semua nilai form ke default"""
     st.session_state.update({
-        'downloaded': False,
         'sumber': "ODC",
+        'lop_name': "",
         'kabel_12': 0.0,
         'kabel_24': 0.0,
         'odp_8': 0,
@@ -67,115 +64,112 @@ def reset_form():
         'tiang_existing': 0,
         'tikungan': 0,
         'izin': "",
-        'lop_name': ""
+        'downloaded': False
     })
 
-# 3. KONFIGURASI SPREADSHEET =================================================
-
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1Zl0txYzsqslXjGV4Y4mcpVMB-vikTDCauzcLOfbbD5c/edit"
-SPREADSHEET_ID = extract_sheet_id(SPREADSHEET_URL)
-
-# 4. FORM INPUT ==============================================================
-
-# Inisialisasi session state
 if 'sumber' not in st.session_state:
     reset_form()
+
+# ==============================================
+# FORM INPUT
+# ==============================================
 
 with st.form("boq_form"):
     st.subheader("🔹 Data Proyek")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.sumber = st.radio(
+        st.radio(
             "Sumber Data:", 
             ["ODC", "ODP"],
             index=0,
             key='sumber'
         )
     with col2:
-        st.session_state.lop_name = st.text_input(
+        st.text_input(
             "Nama LOP (untuk nama file):",
             key='lop_name'
         )
-    
+
     st.subheader("🔹 Input Kabel")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.kabel_12 = st.number_input(
+        st.number_input(
             "Panjang Kabel 12 Core (meter):",
             min_value=0.0,
             value=st.session_state.kabel_12,
             key='kabel_12'
         )
     with col2:
-        st.session_state.kabel_24 = st.number_input(
+        st.number_input(
             "Panjang Kabel 24 Core (meter):",
             min_value=0.0,
             value=st.session_state.kabel_24,
             key='kabel_24'
         )
-    
+
     st.subheader("🔹 Input ODP")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.odp_8 = st.number_input(
+        st.number_input(
             "ODP 8 Port:",
             min_value=0,
             value=st.session_state.odp_8,
             key='odp_8'
         )
     with col2:
-        st.session_state.odp_16 = st.number_input(
+        st.number_input(
             "ODP 16 Port:",
             min_value=0,
             value=st.session_state.odp_16,
             key='odp_16'
         )
-    
+
     st.subheader("🔹 Input Pendukung")
-    st.session_state.tiang_new = st.number_input(
+    st.number_input(
         "Tiang Baru:",
         min_value=0,
         value=st.session_state.tiang_new,
         key='tiang_new'
     )
-    st.session_state.tiang_existing = st.number_input(
+    st.number_input(
         "Tiang Existing:",
         min_value=0,
         value=st.session_state.tiang_existing,
         key='tiang_existing'
     )
-    st.session_state.tikungan = st.number_input(
+    st.number_input(
         "Jumlah Tikungan:",
         min_value=0,
         value=st.session_state.tikungan,
         key='tikungan'
     )
-    st.session_state.izin = st.text_input(
+    st.text_input(
         "Nilai Izin (jika ada):",
         value=st.session_state.izin,
         key='izin'
     )
-    
+
     col1, col2 = st.columns(2)
     with col1:
         submitted = st.form_submit_button("🚀 Proses BOQ")
     with col2:
-        if st.form_submit_button("🔄 Reset Form"):
-            reset_form()
-            st.rerun()
+        reset_clicked = st.form_submit_button("🔄 Reset Form")
 
-# 5. PROSES PERHITUNGAN =====================================================
+# ==============================================
+# PENANGANAN FORM SUBMIT
+# ==============================================
 
-if submitted and not st.session_state.downloaded:
+if reset_clicked:
+    reset_form()
+    st.rerun()
+
+if submitted:
+    # Validasi input
     if not st.session_state.lop_name:
         st.warning("Harap masukkan Nama LOP terlebih dahulu!")
         st.stop()
     
     try:
-        # Buka spreadsheet
-        spreadsheet = gc.open_by_url(SPREADSHEET_URL)
-        sheet = spreadsheet.sheet1
-        
         # Hitung total ODP
         total_odp = st.session_state.odp_8 + st.session_state.odp_16
         
@@ -251,19 +245,6 @@ if submitted and not st.session_state.downloaded:
         
         df = pd.DataFrame({"Designator": designators, "Volume": volumes})
 
-        # Update Google Sheet
-        values = sheet.get_all_values()
-        
-        for i in range(8, len(values)):
-            designator = values[i][1]
-            if designator in df["Designator"].values:
-                volume = df[df["Designator"] == designator]["Volume"].values[0]
-                if designator == "Preliminary Project HRB/Kawasan Khusus":
-                    sheet.update_cell(i+1, 6, int(volume))  # Kolom F
-                    sheet.update_cell(i+1, 7, 1)           # Kolom G
-                else:
-                    sheet.update_cell(i+1, 7, int(volume))
-
         # Tampilkan hasil
         st.success("✅ Perhitungan BOQ Berhasil!")
         st.subheader("📊 Hasil Perhitungan BOQ")
@@ -279,14 +260,16 @@ if submitted and not st.session_state.downloaded:
         with col3:
             st.metric("Total PU-AS", f"{vol_puas:,} unit")
 
-        # Set session state
+        # Simpan hasil di session state
         st.session_state.df_result = df
         st.session_state.show_download = True
 
     except Exception as e:
         st.error(f"Terjadi kesalahan saat memproses: {str(e)}")
 
-# 6. DOWNLOAD OPTIONS ========================================================
+# ==============================================
+# DOWNLOAD OPTIONS
+# ==============================================
 
 if st.session_state.get('show_download', False):
     st.subheader("💾 Download Options")
@@ -308,14 +291,22 @@ if st.session_state.get('show_download', False):
         )
 
     with tab2:
-        # Download full spreadsheet menggunakan Drive API
         st.info("Download seluruh file RAB spreadsheet dari Google Sheets")
         
         if st.button("⬇️ Generate Full RAB Spreadsheet"):
             with st.spinner("Mempersiapkan file. Harap tunggu..."):
                 try:
+                    # Inisialisasi Google Drive API
+                    scope = ['https://www.googleapis.com/auth/drive']
+                    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                        st.secrets["gcp_service_account"],
+                        scopes=scope
+                    )
+                    drive_service = build('drive', 'v3', credentials=creds)
+                    
+                    # Download file
                     request = drive_service.files().export_media(
-                        fileId=SPREADSHEET_ID,
+                        fileId='1Zl0txYzsqslXjGV4Y4mcpVMB-vikTDCauzcLOfbbD5c',
                         mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                     )
                     
@@ -340,28 +331,18 @@ if st.session_state.get('show_download', False):
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
                     
+                except HttpError as error:
+                    st.error(f"Google API error: {error}")
                 except Exception as e:
-                    st.error(f"Gagal mendownload spreadsheet: {str(e)}")
+                    st.error(f"Terjadi kesalahan: {str(e)}")
 
-# 7. RESET FORM =============================================================
+# ==============================================
+# RESET FORM SETELAH DOWNLOAD
+# ==============================================
 
 if st.session_state.get('downloaded', False):
     st.success("🎉 File telah berhasil diunduh!")
     if st.button("🔄 Buat Input Baru"):
-        # Reset Google Sheet values
-        try:
-            spreadsheet = gc.open_by_url(SPREADSHEET_URL)
-            sheet = spreadsheet.sheet1
-            values = sheet.get_all_values()
-            
-            for i in range(8, len(values)):
-                if values[i][1] == "Preliminary Project HRB/Kawasan Khusus":
-                    sheet.update_cell(i+1, 6, "0")
-                sheet.update_cell(i+1, 7, "0")
-                
-            reset_form()
-            st.session_state.show_download = False
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Gagal mereset spreadsheet: {str(e)}")
+        reset_form()
+        st.session_state.show_download = False
+        st.rerun()

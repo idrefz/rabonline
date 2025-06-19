@@ -89,33 +89,33 @@ def calculate_volumes(inputs):
 # ======================
 with st.form("boq_form"):
     st.subheader("📋 Project Information")
-    lop_name = st.text_input("LOP Name:")
+    lop_name = st.text_input("LOP Name:", key="lop")
 
-    st.subheader("📡 Cable Inputs")
+    st.subheader("🛱️ Cable Inputs")
     col1, col2 = st.columns(2)
     with col1:
-        sumber = st.radio("Source Type:", ["ODC", "ODP"], index=0)
+        sumber = st.radio("Source Type:", ["ODC", "ODP"], index=0, key="sumber")
     with col2:
-        kabel_12 = st.number_input("12 Core Cable (m):", min_value=0.0, value=0.0)
-        kabel_24 = st.number_input("24 Core Cable (m):", min_value=0.0, value=0.0)
+        kabel_12 = st.number_input("12 Core Cable (m):", min_value=0.0, value=0.0, key="kabel12")
+        kabel_24 = st.number_input("24 Core Cable (m):", min_value=0.0, value=0.0, key="kabel24")
 
     st.subheader("🏗️ ODP Inputs")
     col1, col2 = st.columns(2)
     with col1:
-        odp_8 = st.number_input("ODP 8 Port:", min_value=0, value=0)
+        odp_8 = st.number_input("ODP 8 Port:", min_value=0, value=0, key="odp8")
     with col2:
-        odp_16 = st.number_input("ODP 16 Port:", min_value=0, value=0)
+        odp_16 = st.number_input("ODP 16 Port:", min_value=0, value=0, key="odp16")
 
     st.subheader("⚙️ Support Inputs")
     col1, col2, col3 = st.columns(3)
     with col1:
-        tiang_new = st.number_input("New Poles:", min_value=0, value=0)
+        tiang_new = st.number_input("New Poles:", min_value=0, value=0, key="tiang_new")
     with col2:
-        tiang_existing = st.number_input("Existing Poles:", min_value=0, value=0)
+        tiang_existing = st.number_input("Existing Poles:", min_value=0, value=0, key="tiang_existing")
     with col3:
-        tikungan = st.number_input("Bends:", min_value=0, value=0)
+        tikungan = st.number_input("Bends:", min_value=0, value=0, key="tikungan")
 
-    izin = st.text_input("Special Permit (if any):", value="")
+    izin = st.text_input("Special Permit (if any):", value="", key="izin")
     uploaded_file = st.file_uploader("Upload BOQ Template", type=["xlsx", "xls"])
     submitted = st.form_submit_button("🚀 Generate BOQ")
 
@@ -196,21 +196,19 @@ if submitted:
 
         st.success(f"✅ Successfully updated {updated_count} items!")
 
-        with st.expander("📋 Updated Items"):
-            st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
-
-        st.subheader("📌 Summary")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("MATERIAL", f"Rp {material:,.2f}")
-        col2.metric("JASA", f"Rp {jasa:,.2f}")
-        col3.metric("TOTAL", f"Rp {total:,.2f}")
-        col4.metric("CPP", f"{cpp:.4f}")
-
     except Exception as e:
         st.error(f"Error processing BOQ: {str(e)}")
 
 if st.session_state.boq_state.get('ready', False):
-    st.subheader("📥 Download Results")
+    st.subheader("📅 Summary")
+    summary = st.session_state.boq_state['summary']
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("MATERIAL", f"Rp {summary['material']:,.2f}")
+    col2.metric("JASA", f"Rp {summary['jasa']:,.2f}")
+    col3.metric("TOTAL", f"Rp {summary['total']:,.2f}")
+    col4.metric("CPP", f"{summary['cpp']:.4f}")
+
+    st.subheader("📅 Download Results")
     st.download_button(
         label="⬇️ Download BOQ File",
         data=st.session_state.boq_state['excel_data'],
@@ -219,5 +217,7 @@ if st.session_state.boq_state.get('ready', False):
     )
 
     if st.button("🔄 Create New BOQ"):
+        for key in ["lop", "sumber", "kabel12", "kabel24", "odp8", "odp16", "tiang_new", "tiang_existing", "tikungan", "izin"]:
+            st.session_state[key] = 0 if isinstance(st.session_state[key], (int, float)) else ""
         st.session_state.boq_state = {'ready': False}
         st.rerun()

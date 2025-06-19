@@ -3,9 +3,8 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from io import BytesIO
-import json
 
-# Load credentials dari secrets
+# Load credentials from secrets
 scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
 creds_dict = st.secrets["gcp_service_account"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -15,24 +14,56 @@ sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1Zl0txYzsqslX
 st.set_page_config("Form Input BOQ", layout="centered")
 st.title("📋 Form Input BOQ Otomatis")
 
+# Initialize session state for download status
+if 'downloaded' not in st.session_state:
+    st.session_state.downloaded = False
+
+# Reset function
+def reset_form():
+    st.session_state.downloaded = False
+    # Reset all input fields
+    st.session_state.sumber = "ODC"
+    st.session_state.jenis_kabel = "12 Core"
+    st.session_state.panjang_kabel = 0.0
+    st.session_state.jenis_odp = "ODP 8"
+    st.session_state.total_odp = 0
+    st.session_state.tiang_new = 0
+    st.session_state.tiang_existing = 0
+    st.session_state.tikungan = 0
+    st.session_state.izin = ""
+    st.session_state.lop_name = ""
+
 # Pilihan sumber data (ODC atau ODP)
-sumber = st.radio("Sumber Data", ["ODC", "ODP"])
+sumber = st.radio("Sumber Data", ["ODC", "ODP"], key="sumber")
 
-# Pilihan Jenis Kabel dan Input Panjang Kabel
-jenis_kabel = st.radio("Pilih Jenis Kabel", ["12 Core", "24 Core"])
-panjang_kabel = st.number_input("Masukkan Panjang Kabel (meter)", min_value=0.0)
+# Form input with separate sections
+with st.form("boq_form"):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Kabel")
+        jenis_kabel = st.radio("Pilih Jenis Kabel", ["12 Core", "24 Core"], key="jenis_kabel")
+        panjang_kabel = st.number_input("Masukkan Panjang Kabel (meter)", min_value=0.0, value=0.0, key="panjang_kabel")
+    
+    with col2:
+        st.subheader("ODP")
+        jenis_odp = st.radio("Pilih Jenis ODP", ["ODP 8", "ODP 16"], key="jenis_odp")
+        total_odp = st.number_input("Masukkan Total ODP", min_value=0, value=0, key="total_odp")
+    
+    st.subheader("Lainnya")
+    tiang_new = st.number_input("Total Tiang Baru", min_value=0, value=0, key="tiang_new")
+    tiang_existing = st.number_input("Total Tiang Existing", min_value=0, value=0, key="tiang_existing")
+    tikungan = st.number_input("Jumlah Tikungan", min_value=0, value=0, key="tikungan")
+    izin = st.text_input("Nilai Izin (isi jika ada)", key="izin")
+    lop_name = st.text_input("Nama LOP (untuk nama file export)", key="lop_name")
+    
+    submit_button = st.form_submit_button("Proses BOQ")
 
-# Pilihan ODP dan Totalnya
-jenis_odp = st.radio("Pilih Jenis ODP", ["ODP 8", "ODP 16"])
-total_odp = st.number_input("Masukkan Total ODP", min_value=0)
-
-tiang_new = st.number_input("Total Tiang Baru", min_value=0)
-tiang_existing = st.number_input("Total Tiang Existing", min_value=0)
-tikungan = st.number_input("Jumlah Tikungan", min_value=0)
-izin = st.text_input("Nilai Izin (isi jika ada)")
-lop_name = st.text_input("Nama LOP (untuk nama file export)")
-
-if st.button("Proses BOQ"):
+if submit_button and not st.session_state.downloaded:
+    if not lop_name:
+        st.warning("Harap masukkan Nama LOP terlebih dahulu!")
+        st.stop()
+    
     vol_kabel = round((panjang_kabel * 1.02) + total_odp)
     kabel_designator = "AC-OF-SM-12-SC_O_STOCK" if jenis_kabel == "12 Core" else "AC-OF-SM-24-SC_O_STOCK"
     odp_designator = "ODP Solid-PB-8 AS" if jenis_odp == "ODP 8" else "ODP Solid-PB-16 AS"
@@ -65,7 +96,7 @@ if st.button("Proses BOQ"):
     data = {"Designator": [], "Volume": []}
 
     def add(designator, volume):
-        if volume and designator:
+        if volume or (designator and volume == 0):  # Include even if volume is 0
             data["Designator"].append(designator)
             data["Volume"].append(round(volume))
 
@@ -82,7 +113,8 @@ if st.button("Proses BOQ"):
     add("TC-02-ODC", tc02)
     add("DD-HDPE-40-1", dd40)
     add("BC-TR-0.6", bc06)
-    add(izin_designator, izin_val)
+    if izin_designator:
+        add(izin_designator, izin_val)
 
     df = pd.DataFrame(data)
 
@@ -123,24 +155,29 @@ if st.button("Proses BOQ"):
     st.markdown(f"**CPP:** {cpp:.2f}")
     st.markdown(f"**Perizinan:** {izin_persen:.2f}%")
 
-    # Proteksi download
-    password = st.text_input("Masukkan password untuk download", type="password")
-    if password == "sdibisa":
-        output = BytesIO()
-        df.to_excel(output, index=False, engine='openpyxl')
-        output.seek(0)
-        st.download_button("⬇️ Download Excel", output, file_name=f"{lop_name}.xlsx")
+    # Download Excel
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='BOQ')
+    output.seek(0)
+    
+    st.download_button(
+        label="⬇️ Download Excel",
+        data=output,
+        file_name=f"BOQ_{lop_name}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        on_click=lambda: setattr(st.session_state, 'downloaded', True)
+    )
 
-        # Reset semua kolom G dan F untuk Preliminary Project HRB/Kawasan Khusus
+# Reset after download
+if st.session_state.downloaded:
+    st.success("File telah berhasil diunduh!")
+    if st.button("🔁 Buat Input Baru"):
+        # Reset Google Sheet values
+        values = sheet.get_all_values()
         for i in range(8, len(values)):
             if values[i][1] == "Preliminary Project HRB/Kawasan Khusus":
                 sheet.update_cell(i + 1, 6, "0")
             sheet.update_cell(i + 1, 7, "0")
-
-        st.success("Download selesai dan volume berhasil di-reset.")
-
-    # Tombol reset
-    if st.button("🔁 Input Lagi (Reset Volume ke 0)"):
-        for i in range(8, len(values)):
-            sheet.update_cell(i + 1, 7, "0")
-        st.success("Volume berhasil di-reset ke 0.")
+        reset_form()
+        st.rerun()

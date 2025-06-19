@@ -9,7 +9,7 @@ from openpyxl.utils import get_column_letter
 # 🎩 CONFIGURATION
 # ======================
 st.set_page_config("BOQ Generator", layout="centered")
-st.title("📊 BOQ Generator (Designator from B9)")
+st.title("📊 BOQ Generator (Autofill VOL)")
 
 # Initialize session state
 if 'boq_state' not in st.session_state:
@@ -20,57 +20,31 @@ if 'boq_state' not in st.session_state:
         'updated_items': []
     }
 
-# Designator to RAB Code Mapping
+# Designator to RAB Code Mapping (adjusted for your template)
 RAB_MAP = {
-    "AC-OF-SM-12-SC_O_STOCK": "DC-01-01-1111",
-    "AC-OF-SM-24-SC_O_STOCK": "DC-01-04-1100",
-    "ODP Solid-PB-8 AS": "DC-01-08-4400",
-    "ODP Solid-PB-16 AS": "DC-01-04-0400",
-    "PU-S7.0-400NM": "DC-01-04-0410",
-    "PU-AS": "DC-01-08-4280",
-    "OS-SM-1-ODC": "AC-01-04-1100",
-    "TC-02-ODC": "AC-01-04-2400",
-    "DD-HDPE-40-1": "AC-01-04-0500",
-    "BC-TR-0.6": "DC-01-04-1420",
-    "PS-1-4-ODC": "DC-01-04-2420",
-    "OS-SM-1-ODP": "DC-01-04-2460",
-    "OS-SM-1": "DC-01-04-2480",
-    "PC-UPC-652-2": "DC-01-04-2490",
-    "PC-APC/UPC-652-A1": "DC-01-04-2500",
-    "Preliminary Project HRB/Kawasan Khusus": "IZIN-KHUSUS-001"
+    "DC-01-01-1111": "DC-01-01-1111",  # AC-OF-SM-12-SC_O_STOCK
+    "DC-01-04-1100": "DC-01-04-1100",  # AC-OF-SM-24-SC_O_STOCK
+    "DC-01-08-4400": "DC-01-08-4400",  # ODP Solid-PB-8 AS
+    "DC-01-04-0400": "DC-01-04-0400",  # ODP Solid-PB-16 AS
+    "DC-01-04-0410": "DC-01-04-0410",  # PU-S7.0-400NM
+    "DC-01-08-4280": "DC-01-08-4280",  # PU-AS
+    "AC-01-04-1100": "AC-01-04-1100",  # OS-SM-1-ODC
+    "AC-01-04-2400": "AC-01-04-2400",  # TC-02-ODC
+    "AC-01-04-0500": "AC-01-04-0500",  # DD-HDPE-40-1
+    "DC-01-04-1420": "DC-01-04-1420",  # BC-TR-0.6
+    "DC-01-04-2420": "DC-01-04-2420",  # PS-1-4-ODC
+    "DC-01-04-2460": "DC-01-04-2460",  # OS-SM-1-ODP
+    "DC-01-04-2480": "DC-01-04-2480",  # OS-SM-1
+    "DC-01-04-2490": "DC-01-04-2490",  # PC-UPC-652-2
+    "DC-01-04-2500": "DC-01-04-2500",  # PC-APC/UPC-652-A1
+    "IZIN-KHUSUS-001": "IZIN-KHUSUS-001"  # Preliminary Project HRB/Kawasan Khusus
 }
 
 # ======================
 # 🔧 CORE FUNCTIONS
 # ======================
-def validate_template(ws):
-    """Validate template structure with designator starting at B9"""
-    try:
-        # Check if row 8 has headers
-        if not any(cell.value for cell in ws[8]):
-            return False, "Row 8 should contain column headers"
-        
-        # Check if B9 has first designator
-        if not ws['B9'].value:
-            return False, "First designator should be at cell B9"
-        
-        return True, ""
-    except Exception as e:
-        return False, f"Validation error: {str(e)}"
-
-def apply_header_style(ws):
-    """Apply styling to header row (row 8)"""
-    header_fill = PatternFill(start_color="4B0082", end_color="4B0082", fill_type="solid")
-    header_font = Font(bold=True, color="FFFFFF")
-    
-    for cell in ws[8]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-    return ws
-
 def calculate_volumes(inputs):
-    """Calculate BOQ volumes"""
+    """Calculate BOQ volumes based on inputs"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
     
     # Cable calculations
@@ -82,22 +56,22 @@ def calculate_volumes(inputs):
     vol_puas += inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan']
     
     return [
-        {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
-        {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
-        {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
-        {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
-        {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
-        {"designator": "PU-AS", "volume": vol_puas},
-        {"designator": "OS-SM-1-ODC", "volume": (12 if inputs['kabel_12'] > 0 else 24 if inputs['kabel_24'] > 0 else 0) + total_odp if inputs['sumber'] == "ODC" else 0},
-        {"designator": "TC-02-ODC", "volume": 1 if inputs['sumber'] == "ODC" else 0},
-        {"designator": "DD-HDPE-40-1", "volume": 6 if inputs['sumber'] == "ODC" else 0},
-        {"designator": "BC-TR-0.6", "volume": 6 if inputs['sumber'] == "ODC" else 0},
-        {"designator": "PS-1-4-ODC", "volume": (total_odp - 1) // 4 + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0},
-        {"designator": "OS-SM-1-ODP", "volume": total_odp * 2 if inputs['sumber'] == "ODP" else 0},
-        {"designator": "OS-SM-1", "volume": ((12 if inputs['kabel_12'] > 0 else 24 if inputs['kabel_24'] > 0 else 0) + total_odp) if inputs['sumber'] == "ODC" else (total_odp * 2)},
-        {"designator": "PC-UPC-652-2", "volume": (total_odp - 1) // 4 + 1 if total_odp > 0 else 0},
-        {"designator": "PC-APC/UPC-652-A1", "volume": 18 if ((total_odp - 1) // 4 + 1) == 1 else (((total_odp - 1) // 4 + 1) * 2 if ((total_odp - 1) // 4 + 1) > 1 else 0)},
-        {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if inputs['izin'] else 0}
+        {"designator": "DC-01-01-1111", "volume": vol_kabel_12},  # 12 Core
+        {"designator": "DC-01-04-1100", "volume": vol_kabel_24},  # 24 Core
+        {"designator": "DC-01-08-4400", "volume": inputs['odp_8']},  # ODP 8
+        {"designator": "DC-01-04-0400", "volume": inputs['odp_16']},  # ODP 16
+        {"designator": "DC-01-04-0410", "volume": inputs['tiang_new']},  # New Poles
+        {"designator": "DC-01-08-4280", "volume": vol_puas},  # PU-AS
+        {"designator": "AC-01-04-1100", "volume": (12 if inputs['kabel_12'] > 0 else 24 if inputs['kabel_24'] > 0 else 0) + total_odp if inputs['sumber'] == "ODC" else 0},  # OS-SM-1-ODC
+        {"designator": "AC-01-04-2400", "volume": 1 if inputs['sumber'] == "ODC" else 0},  # TC-02-ODC
+        {"designator": "AC-01-04-0500", "volume": 6 if inputs['sumber'] == "ODC" else 0},  # DD-HDPE-40-1
+        {"designator": "DC-01-04-1420", "volume": 6 if inputs['sumber'] == "ODC" else 0},  # BC-TR-0.6
+        {"designator": "DC-01-04-2420", "volume": (total_odp - 1) // 4 + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0},  # PS-1-4-ODC
+        {"designator": "DC-01-04-2460", "volume": total_odp * 2 if inputs['sumber'] == "ODP" else 0},  # OS-SM-1-ODP
+        {"designator": "DC-01-04-2480", "volume": ((12 if inputs['kabel_12'] > 0 else 24 if inputs['kabel_24'] > 0 else 0) + total_odp) if inputs['sumber'] == "ODC" else (total_odp * 2)},  # OS-SM-1
+        {"designator": "DC-01-04-2490", "volume": (total_odp - 1) // 4 + 1 if total_odp > 0 else 0},  # PC-UPC-652-2
+        {"designator": "DC-01-04-2500", "volume": 18 if ((total_odp - 1) // 4 + 1) == 1 else (((total_odp - 1) // 4 + 1) * 2 if ((total_odp - 1) // 4 + 1) > 1 else 0)},  # PC-APC/UPC-652-A1
+        {"designator": "IZIN-KHUSUS-001", "volume": 1 if inputs['izin'] else 0}  # Izin Khusus
     ]
 
 # ======================
@@ -136,10 +110,9 @@ with st.form("boq_form"):
     with col3:
         tikungan = st.number_input("Bends:", min_value=0, value=0)
     
-    izin = st.text_input("Special Permit (if any):", value="")
+    izin = st.text_input("Special Permit (IZIN-KHUSUS-001):", value="")
     
-    uploaded_file = st.file_uploader("Upload Template (Header row 8, Designator from B9)", 
-                                   type=["xlsx", "xls"])
+    uploaded_file = st.file_uploader("Upload BOQ Template", type=["xlsx", "xls"])
 
     submitted = st.form_submit_button("🚀 Generate BOQ")
 
@@ -161,27 +134,11 @@ if submitted:
         wb = openpyxl.load_workbook(uploaded_file)
         ws = wb.active
         
-        # Validate template structure
-        is_valid, validation_msg = validate_template(ws)
-        if not is_valid:
-            st.error(f"Template validation failed: {validation_msg}")
-            st.info("""
-            Your template should have:
-            1. Column headers in row 8
-            2. First designator in cell B9
-            """)
-            st.stop()
-        
-        # Find VOL column (assume it's in row 8)
-        vol_col = None
-        for cell in ws[8]:
-            if cell.value and "VOL" in str(cell.value).upper():
-                vol_col = cell.column
-                break
-        
-        if not vol_col:
-            st.error("Could not find VOL column in header row (row 8)")
-            st.stop()
+        # Update project info (rows 1-4)
+        ws['B1'] = "DAFTAR HARGA SATUAN"
+        ws['B2'] = "PENGADAAN DAN PEMASANGAN GRANULAR MODERNIZATION"
+        ws['B3'] = f"PROJECT : {project_name}"
+        ws['B4'] = f"STO : {sto_code}"
         
         # Calculate volumes
         input_data = {
@@ -197,27 +154,27 @@ if submitted:
         }
         items = calculate_volumes(input_data)
         
-        # Update volumes starting from B9
+        # Update volumes (B9:B288 to G9:G288)
         updated_count = 0
-        for row in range(9, ws.max_row + 1):
-            designator = str(ws.cell(row=row, column=2).value or "").strip()  # Column B
+        special_permit_added = False
+        
+        for row in range(9, 289):  # From row 9 to 288
+            designator = str(ws[f'B{row}'].value or "").strip()
             
+            # Special handling for permit (add to first empty row if needed)
+            if not special_permit_added and izin and row > 9 and not ws[f'B{row}'].value:
+                ws[f'B{row}'] = "IZIN-KHUSUS-001"
+                ws[f'F{row}'] = izin  # Special permit value in column F
+                ws[f'G{row}'] = 1     # Volume 1 in column G
+                special_permit_added = True
+                updated_count += 1
+                continue
+                
             for item in items:
-                if item["volume"] > 0 and designator == RAB_MAP.get(item["designator"], ""):
-                    ws.cell(row=row, column=vol_col, value=item["volume"])
+                if item["volume"] > 0 and designator == item["designator"]:
+                    ws[f'G{row}'] = item["volume"]  # Update VOL in column G
                     updated_count += 1
                     break
-        
-        # Apply styling
-        ws = apply_header_style(ws)
-        
-        # Auto-adjust column widths
-        for col in ws.columns:
-            max_length = max(
-                len(str(cell.value or "")) for cell in col
-            )
-            adjusted_width = (max_length + 2) * 1.2
-            ws.column_dimensions[get_column_letter(col[0].column)].width = adjusted_width
         
         # Save output
         output = BytesIO()
@@ -232,10 +189,10 @@ if submitted:
             'updated_items': [item for item in items if item['volume'] > 0]
         }
         
-        st.success(f"✅ Successfully updated {updated_count} items!")
+        st.success(f"✅ Successfully updated {updated_count} items in columns B9:G288!")
         
         # Show updated items
-        with st.expander("📋 Updated Items"):
+        with st.expander("📋 Updated Items Preview"):
             st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
             
     except Exception as e:

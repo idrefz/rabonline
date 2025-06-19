@@ -138,9 +138,19 @@ if submitted:
                     updated_count += 1
                     break
 
-        material = float(ws['G289'].value or 0)
-        jasa = float(ws['G290'].value or 0)
-        total = float(ws['G291'].value or 0)
+        # Manual calculation of total material
+        material = 0.0
+        jasa = 0.0
+        for row in range(9, 289):
+            harga = ws[f'F{row}'].value
+            volume = ws[f'G{row}'].value
+            try:
+                harga = float(harga) if harga is not None else 0.0
+                volume = float(volume) if volume is not None else 0.0
+                material += harga * volume
+            except:
+                continue
+        total = material + jasa
         cpp = round((odp_8 + odp_16) * 8 / total if total else 0, 4)
 
         summary = {

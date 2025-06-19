@@ -9,65 +9,59 @@ scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/au
 creds_dict = st.secrets["gcp_service_account"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1Zl0txYzsqslXjGV4Y4mcpVMB-vikTDCauzcLOfbbD5c/edit").sheet1
+spreadsheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1Zl0txYzsqslXjGV4Y4mcpVMB-vikTDCauzcLOfbbD5c/edit")
 
 st.set_page_config("Form Input BOQ", layout="centered")
 st.title("📋 Form Input BOQ Otomatis")
 
-# Initialize session state for download status
+# Initialize session state
 if 'downloaded' not in st.session_state:
     st.session_state.downloaded = False
 
-# Reset function
 def reset_form():
     st.session_state.downloaded = False
-    # Reset all input fields
-    st.session_state.sumber = "ODC"
-    st.session_state.jenis_kabel = "12 Core"
-    st.session_state.panjang_kabel = 0.0
-    st.session_state.jenis_odp = "ODP 8"
-    st.session_state.total_odp = 0
+    st.session_state.kabel_12 = 0.0
+    st.session_state.kabel_24 = 0.0 
+    st.session_state.odp_8 = 0
+    st.session_state.odp_16 = 0
     st.session_state.tiang_new = 0
     st.session_state.tiang_existing = 0
     st.session_state.tikungan = 0
     st.session_state.izin = ""
     st.session_state.lop_name = ""
 
-# Pilihan sumber data (ODC atau ODP)
-sumber = st.radio("Sumber Data", ["ODC", "ODP"], key="sumber")
-
-# Form input with separate sections
+# Form input
 with st.form("boq_form"):
-    col1, col2 = st.columns(2)
+    st.subheader("Input Kabel")
+    kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=0.0, key="kabel_12")
+    kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=0.0, key="kabel_24")
     
-    with col1:
-        st.subheader("Kabel")
-        jenis_kabel = st.radio("Pilih Jenis Kabel", ["12 Core", "24 Core"], key="jenis_kabel")
-        panjang_kabel = st.number_input("Masukkan Panjang Kabel (meter)", min_value=0.0, value=0.0, key="panjang_kabel")
+    st.subheader("Input ODP")
+    odp_8 = st.number_input("Jumlah ODP 8", min_value=0, value=0, key="odp_8")
+    odp_16 = st.number_input("Jumlah ODP 16", min_value=0, value=0, key="odp_16")
     
-    with col2:
-        st.subheader("ODP")
-        jenis_odp = st.radio("Pilih Jenis ODP", ["ODP 8", "ODP 16"], key="jenis_odp")
-        total_odp = st.number_input("Masukkan Total ODP", min_value=0, value=0, key="total_odp")
-    
-    st.subheader("Lainnya")
+    st.subheader("Input Lainnya")
     tiang_new = st.number_input("Total Tiang Baru", min_value=0, value=0, key="tiang_new")
     tiang_existing = st.number_input("Total Tiang Existing", min_value=0, value=0, key="tiang_existing")
     tikungan = st.number_input("Jumlah Tikungan", min_value=0, value=0, key="tikungan")
     izin = st.text_input("Nilai Izin (isi jika ada)", key="izin")
     lop_name = st.text_input("Nama LOP (untuk nama file export)", key="lop_name")
     
-    submit_button = st.form_submit_button("Proses BOQ")
+    submitted = st.form_submit_button("Proses BOQ")
 
-if submit_button and not st.session_state.downloaded:
+if submitted and not st.session_state.downloaded:
     if not lop_name:
         st.warning("Harap masukkan Nama LOP terlebih dahulu!")
         st.stop()
     
-    vol_kabel = round((panjang_kabel * 1.02) + total_odp)
-    kabel_designator = "AC-OF-SM-12-SC_O_STOCK" if jenis_kabel == "12 Core" else "AC-OF-SM-24-SC_O_STOCK"
-    odp_designator = "ODP Solid-PB-8 AS" if jenis_odp == "ODP 8" else "ODP Solid-PB-16 AS"
-
+    # Hitung total kabel dan ODP
+    total_kabel = kabel_12 + kabel_24
+    total_odp = odp_8 + odp_16
+    
+    # Hitung volume
+    vol_kabel_12 = round((kabel_12 * 1.02) + odp_8 + odp_16) if kabel_12 > 0 else 0
+    vol_kabel_24 = round((kabel_24 * 1.02) + odp_8 + odp_16) if kabel_24 > 0 else 0
+    
     # PU-AS Logic
     if total_odp == 0:
         vol_puas = 0
@@ -77,107 +71,93 @@ if submit_button and not st.session_state.downloaded:
         vol_puas = (total_odp * 2 - 1)
     vol_puas += tiang_new + tiang_existing + tikungan
 
-    os_odc = (12 if jenis_kabel == "12 Core" else 24) + total_odp if sumber == "ODC" else 0
-    os_odp = total_odp * 2 if sumber == "ODP" else 0
-    os_total = os_odc + os_odp
-
-    pc_upc = (total_odp - 1) // 4 + 1 if total_odp else 0
-    pc_apc = 18 if pc_upc == 1 else pc_upc * 2 if pc_upc > 1 else 0
-
-    ps_odc = (total_odp - 1) // 4 + 1 if total_odp else 0
-
-    tc02 = 1 if sumber == "ODC" else 0
-    dd40 = 6 if sumber == "ODC" else 0
-    bc06 = 6 if sumber == "ODC" else 0
-
-    izin_val = 1 if izin else 0
-    izin_designator = "Preliminary Project HRB/Kawasan Khusus" if izin else None
-
-    data = {"Designator": [], "Volume": []}
-
-    def add(designator, volume):
-        if volume or (designator and volume == 0):  # Include even if volume is 0
-            data["Designator"].append(designator)
-            data["Volume"].append(round(volume))
-
-    add(kabel_designator, vol_kabel)
-    add(odp_designator, total_odp)
-    add("PU-S7.0-400NM", tiang_new)
-    add("PU-AS", vol_puas)
-    add("OS-SM-1-ODC", os_odc)
-    add("OS-SM-1-ODP", os_odp)
-    add("OS-SM-1", os_total)
-    add("PC-UPC-652-2", pc_upc)
-    add("PC-APC/UPC-652-A1", pc_apc)
-    add("PS-1-4-ODC", ps_odc)
-    add("TC-02-ODC", tc02)
-    add("DD-HDPE-40-1", dd40)
-    add("BC-TR-0.6", bc06)
-    if izin_designator:
-        add(izin_designator, izin_val)
-
+    # Buat dataframe hasil
+    data = {
+        "Designator": [
+            "AC-OF-SM-12-SC_O_STOCK" if kabel_12 > 0 else "",
+            "AC-OF-SM-24-SC_O_STOCK" if kabel_24 > 0 else "",
+            "ODP Solid-PB-8 AS" if odp_8 > 0 else "",
+            "ODP Solid-PB-16 AS" if odp_16 > 0 else "",
+            "PU-S7.0-400NM",
+            "PU-AS",
+            "Preliminary Project HRB/Kawasan Khusus" if izin else ""
+        ],
+        "Volume": [
+            vol_kabel_12,
+            vol_kabel_24,
+            odp_8,
+            odp_16,
+            tiang_new,
+            vol_puas,
+            1 if izin else 0
+        ]
+    }
+    
     df = pd.DataFrame(data)
+    df = df[df["Designator"] != ""]  # Hapus baris kosong
 
-    # Simpan ke Google Sheet
+    # Update Google Sheet
+    sheet = spreadsheet.sheet1
     values = sheet.get_all_values()
+    
     for i in range(8, len(values)):
-        designator_cell = values[i][1]
-        match = df[df["Designator"] == designator_cell]
-        if not match.empty:
-            volume = match["Volume"].values[0]
-            if designator_cell == "Preliminary Project HRB/Kawasan Khusus":
-                sheet.update_cell(i + 1, 6, int(volume))  # Kolom F
-                sheet.update_cell(i + 1, 7, 1)            # Kolom G
+        designator = values[i][1]
+        if designator in df["Designator"].values:
+            volume = df[df["Designator"] == designator]["Volume"].values[0]
+            if designator == "Preliminary Project HRB/Kawasan Khusus":
+                sheet.update_cell(i+1, 6, int(volume))  # Kolom F
+                sheet.update_cell(i+1, 7, 1)           # Kolom G
             else:
-                sheet.update_cell(i + 1, 7, int(volume))
+                sheet.update_cell(i+1, 7, int(volume))
 
-    # Tampilkan tabel hasil BOQ
+    # Tampilkan hasil
     st.subheader("Hasil Perhitungan BOQ")
     st.dataframe(df)
 
-    # Total material dan jasa dari Google Sheet
-    total_material = sheet.acell("G289").value
-    total_jasa = sheet.acell("G290").value
-    total_all = sheet.acell("G291").value
-
-    st.markdown(f"**Total Material:** Rp {total_material}")
-    st.markdown(f"**Total Jasa:** Rp {total_jasa}")
-    st.markdown(f"**Total Keseluruhan:** Rp {total_all}")
-
-    # CPP dan Perizinan
-    total_boq_volume = df["Volume"].sum()
-    cpp = (total_odp * 8) / total_boq_volume if total_boq_volume else 0
-
-    izin_rows = sheet.col_values(6)[8:]
-    izin_count = izin_rows.count("1")
-    izin_persen = (izin_count / len(izin_rows)) * 100 if izin_rows else 0
-
-    st.markdown(f"**CPP:** {cpp:.2f}")
-    st.markdown(f"**Perizinan:** {izin_persen:.2f}%")
-
-    # Download Excel
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    # Download Options
+    st.subheader("Download Options")
+    
+    # 1. Download Hasil BOQ
+    output_boq = BytesIO()
+    with pd.ExcelWriter(output_boq, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='BOQ')
-    output.seek(0)
+    output_boq.seek(0)
     
     st.download_button(
-        label="⬇️ Download Excel",
-        data=output,
+        label="⬇️ Download Hasil BOQ",
+        data=output_boq,
         file_name=f"BOQ_{lop_name}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        on_click=lambda: setattr(st.session_state, 'downloaded', True)
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+    
+    # 2. Download Seluruh Spreadsheet RAB
+    st.markdown("### Download RAB Lengkap")
+    st.warning("File ini akan mendownload seluruh spreadsheet RAB sebagai Excel")
+    
+    if st.button("⬇️ Download Full RAB Spreadsheet"):
+        # Download seluruh spreadsheet
+        output_rab = BytesIO()
+        spreadsheet.export(format='xlsx', output=output_rab)
+        output_rab.seek(0)
+        
+        st.download_button(
+            label="Klik untuk Download RAB",
+            data=output_rab,
+            file_name=f"RAB_Lengkap_{lop_name}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=lambda: setattr(st.session_state, 'downloaded', True)
+        )
 
 # Reset after download
 if st.session_state.downloaded:
     st.success("File telah berhasil diunduh!")
     if st.button("🔁 Buat Input Baru"):
         # Reset Google Sheet values
+        sheet = spreadsheet.sheet1
         values = sheet.get_all_values()
         for i in range(8, len(values)):
             if values[i][1] == "Preliminary Project HRB/Kawasan Khusus":
-                sheet.update_cell(i + 1, 6, "0")
-            sheet.update_cell(i + 1, 7, "0")
+                sheet.update_cell(i+1, 6, "0")
+            sheet.update_cell(i+1, 7, "0")
         reset_form()
         st.rerun()

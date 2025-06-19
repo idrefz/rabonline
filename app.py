@@ -85,79 +85,33 @@ def calculate_volumes(inputs):
     ]
 
 # ======================
-# 🔄 PROCESSING
+# 💾 DOWNLOAD OUTPUT & SUMMARY
 # ======================
-# (unchanged form and layout code up to file upload)
+if st.session_state.boq_state.get('ready', False):
+    st.subheader("📥 Download Results")
+    st.download_button(
+        label="⬇️ Download BOQ File",
+        data=st.session_state.boq_state['excel_data'],
+        file_name=f"BOQ_{st.session_state.boq_state['project_name']}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
-    try:
-        wb = openpyxl.load_workbook(uploaded_file)
-        ws = wb.active
+    # Ringkasan hasil
+    st.subheader("📌 Ringkasan")
+    summary = st.session_state.boq_state.get("summary", {})
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("MATERIAL", f"Rp {summary.get('material', 0):,.0f}")
+    col2.metric("JASA", f"Rp {summary.get('jasa', 0):,.0f}")
+    col3.metric("TOTAL", f"Rp {summary.get('total', 0):,.0f}")
+    col4.metric("CPP", f"{summary.get('cpp', 0):.4f}")
 
-        input_data = {
-            'sumber': sumber,
-            'kabel_12': kabel_12,
-            'kabel_24': kabel_24,
-            'odp_8': odp_8,
-            'odp_16': odp_16,
-            'tiang_new': tiang_new,
-            'tiang_existing': tiang_existing,
-            'tikungan': tikungan,
-            'izin': izin
-        }
-        items = calculate_volumes(input_data)
+    # Updated Items Table
+    st.subheader("📋 Tabel Updated Items")
+    st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
 
-        updated_count = 0
-        material = 0.0
-        jasa = 0.0
-        special_permit_added = False
-
-        for row in range(9, 289):
-            designator = str(ws[f'B{row}'].value or "").strip()
-            harga_satuan = ws[f'F{row}'].value or 0
-            for item in items:
-                if item["volume"] > 0 and designator == item["designator"]:
-                    ws[f'G{row}'] = item["volume"]
-                    try:
-                        subtotal = float(harga_satuan) * item["volume"]
-                        if "Preliminary" in designator:
-                            jasa += subtotal
-                        else:
-                            material += subtotal
-                    except:
-                        pass
-                    updated_count += 1
-                    break
-            if not special_permit_added and izin and not designator:
-                ws[f'B{row}'] = "Preliminary Project HRB/Kawasan Khusus"
-                ws[f'F{row}'] = float(izin)
-                ws[f'G{row}'] = 1
-                jasa += float(izin)
-                special_permit_added = True
-                updated_count += 1
-
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-
-        total = material + jasa
-        cpp = ((odp_8 + odp_16) * 8) / total if total > 0 else 0
-
-        st.session_state.boq_state = {
-            'ready': True,
-            'excel_data': output,
-            'project_name': lop_name,
-            'updated_items': [item for item in items if item['volume'] > 0],
-            'summary': {
-                'material': material,
-                'jasa': jasa,
-                'total': total,
-                'cpp': cpp
-            }
-        }
-
-        st.success(f"✅ Successfully updated {updated_count} items!")
-        with st.expander("📋 Updated Items"):
-            st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
-
-    except Exception as e:
-        st.error(f"Error processing BOQ: {str(e)}")
+    if st.button("🔄 Create New BOQ"):
+        for key in ["kabel_12", "kabel_24", "odp_8", "odp_16", "tiang_new", "tiang_existing", "tikungan", "izin", "uploaded_file"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state.boq_state = {'ready': False}
+        st.rerun()

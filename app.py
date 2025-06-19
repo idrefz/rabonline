@@ -98,16 +98,18 @@ def calculate_volumes(inputs):
     # Calculate PU-AS volume
     vol_puas = max(0, (total_odp * 2) - 1 + inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan'])
 
-    # Calculate OS-SM-1 volumes based on source
-    vol_os_sm_1_odc = 0
-    if inputs['sumber'] == "ODC":
-        if inputs['kabel_12'] > 0:
-            vol_os_sm_1_odc = 12 + total_odp
-        elif inputs['kabel_24'] > 0:
-            vol_os_sm_1_odc = 24 + total_odp
-
+    # Calculate OS-SM-1 volumes based on source (REVISED)
+    vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0  # Changed calculation for ODC
     vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
     vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
+
+    # Calculate Base Tray ODC (NEW)
+    vol_base_tray_odc = 0
+    if inputs['sumber'] == "ODC":
+        if inputs['kabel_12'] > 0:
+            vol_base_tray_odc = 1
+        elif inputs['kabel_24'] > 0:
+            vol_base_tray_odc = 2
 
     # Calculate connector volumes
     vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
@@ -117,9 +119,10 @@ def calculate_volumes(inputs):
     # Calculate other components
     vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
     vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
-    vol_bc_tr = 3 if inputs['sumber'] == "ODC" else 0
+    vol_bc_tr = 6 if inputs['sumber'] == "ODC" else 0
 
-    return [
+    # Prepare items list
+    items = [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
         {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
@@ -135,10 +138,13 @@ def calculate_volumes(inputs):
         {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
+        {"designator": "Base Tray ODC", "volume": vol_base_tray_odc},  # NEW designator
         {"designator": "Preliminary Project HRB/Kawasan Khusus", 
          "volume": 1 if inputs['izin'] else 0, 
          "izin_value": float(inputs['izin']) if inputs['izin'] else 0}
     ]
+
+    return items
 
 def process_boq_template(uploaded_file, inputs, lop_name):
     """Process the BOQ template file and calculate all metrics"""
@@ -167,6 +173,23 @@ def process_boq_template(uploaded_file, inputs, lop_name):
                         ws[f'F{row}'] = item.get("izin_value", 0)
                     updated_count += 1
                     break
+
+        # Add new items that don't exist in template
+        existing_designators = [str(ws[f'B{r}'].value).strip() for r in range(9, 289)]
+        for item in items:
+            if item["volume"] > 0 and item["designator"] not in existing_designators:
+                empty_row = None
+                for r in range(9, 289):
+                    if str(ws[f'B{r}'].value).strip() == "":
+                        empty_row = r
+                        break
+                
+                if empty_row:
+                    ws[f'B{empty_row}'] = item["designator"]
+                    ws[f'G{empty_row}'] = item["volume"]
+                    if item["designator"] == "Preliminary Project HRB/Kawasan Khusus":
+                        ws[f'F{empty_row}'] = item.get("izin_value", 0)
+                    updated_count += 1
 
         # Calculate material, jasa, and total costs
         material = jasa = 0.0

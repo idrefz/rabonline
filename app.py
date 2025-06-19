@@ -117,7 +117,7 @@ def calculate_volumes(inputs):
     # Calculate other components
     vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
     vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
-    vol_bc_tr = 6 if inputs['sumber'] == "ODC" else 0
+    vol_bc_tr = 3 if inputs['sumber'] == "ODC" else 0
 
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},

@@ -3,6 +3,15 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from io import BytesIO
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+try:
+    # kode download
+except Exception as e:
+    logger.error(f"Error downloading spreadsheet: {str(e)}", exc_info=True)
+    st.error("Terjadi kesalahan teknis. Silakan coba lagi atau hubungi administrator.")
 
 # Load credentials from secrets
 scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/drive']
@@ -256,12 +265,4 @@ if st.session_state.downloaded:
         reset_form()
         st.rerun()
 
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-try:
-    # kode download
-except Exception as e:
-    logger.error(f"Error downloading spreadsheet: {str(e)}", exc_info=True)
-    st.error("Terjadi kesalahan teknis. Silakan coba lagi atau hubungi administrator.")

@@ -7,12 +7,14 @@ import openpyxl
 st.set_page_config("Form Input BOQ", layout="centered")
 st.title("📋 Form Input BOQ Otomatis")
 
-# Inisialisasi session state
+# Inisialisasi session state dengan nilai default
 if 'download_ready' not in st.session_state:
-    st.session_state.download_ready = False
-    st.session_state.download_data = None
-    st.session_state.lop_name = ""
-    st.session_state.debug_info = []
+    st.session_state.update({
+        'download_ready': False,
+        'download_data': None,
+        'lop_name': "",
+        'debug_info': []  # Pastikan debug_info selalu ada sebagai list
+    })
 
 # Fungsi untuk memetakan designator ke kode RAB
 def get_rab_code(designator):
@@ -84,13 +86,14 @@ if submitted:
         # Reset debug info
         st.session_state.debug_info = []
         
-        # Hitung volume (sama seperti sebelumnya)
+        # Hitung volume
         total_odp = odp_8 + odp_16
         vol_kabel_12 = round((kabel_12 * 1.02) + (total_odp if sumber == "ODC" else 0)) if kabel_12 > 0 else 0
         vol_kabel_24 = round((kabel_24 * 1.02) + (total_odp if sumber == "ODC" else 0)) if kabel_24 > 0 else 0
         vol_puas = (total_odp * 2 - 1) if total_odp > 1 else (1 if total_odp == 1 else 0)
         vol_puas += tiang_new + tiang_existing + tikungan
 
+        # Daftar item dengan volume
         items = [
             {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12 if kabel_12 > 0 else None},
             {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24 if kabel_24 > 0 else None},
@@ -109,11 +112,12 @@ if submitted:
             {"designator": "PC-APC/UPC-652-A1", "volume": 18 if ((total_odp - 1) // 4 + 1) == 1 else (((total_odp - 1) // 4 + 1) * 2 if ((total_odp - 1) // 4 + 1) > 1 else 0)},
             {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if izin else None}
         ]
+
         # Baca template
         wb = openpyxl.load_workbook(uploaded_file)
         ws = wb.active
         
-        # Debug: Simpan header untuk pemeriksaan
+        # Debug info
         st.session_state.debug_info.append(f"File loaded: {uploaded_file.name}")
         st.session_state.debug_info.append(f"Sheet name: {ws.title}")
         st.session_state.debug_info.append(f"Max row: {ws.max_row}, Max column: {ws.max_column}")
@@ -124,7 +128,7 @@ if submitted:
         ws['B3'] = f"PROJECT : {project_name}"
         ws['B4'] = f"STO : {sto_code}"
 
-        # Temukan kolom VOL (cari header "VOL")
+        # Temukan kolom VOL
         vol_col = None
         header_row = 7  # Asumsi header di row 7
         for col in range(1, ws.max_column + 1):
@@ -134,10 +138,10 @@ if submitted:
                 break
         
         if vol_col is None:
-            vol_col = 7  # Fallback ke kolom 7 jika tidak ditemukan
+            vol_col = 7  # Fallback
             st.warning("Kolom VOL tidak ditemukan, menggunakan kolom 7 sebagai default")
 
-        st.session_state.debug_info.append(f"Kolom VOL ditemukan di kolom {vol_col}")
+        st.session_state.debug_info.append(f"Kolom VOL: {vol_col}")
 
         # Proses update volume
         updated_count = 0
@@ -145,7 +149,7 @@ if submitted:
         
         for row in range(start_row, ws.max_row + 1):
             designator_cell = ws.cell(row=row, column=2)  # Kolom B
-            rab_code = str(designator_cell.value).strip()
+            rab_code = str(designator_cell.value).strip() if designator_cell.value else ""
             
             for item in items:
                 if item["volume"] > 0 and rab_code == get_rab_code(item["designator"]):
@@ -168,19 +172,19 @@ if submitted:
         st.session_state.download_ready = True
         st.session_state.lop_name = lop_name
 
-        # Tampilkan hasil
         st.success(f"✅ Berhasil mengupdate {updated_count} item volume!")
         
-        # Tampilkan preview data yang diupdate
+        # Tampilkan data yang diupdate
         st.subheader("Data yang Diupdate")
         st.table(pd.DataFrame([item for item in items if item['volume'] > 0]))
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
-        st.session_state.debug_info.append(f"Error: {str(e)}")
+        if 'debug_info' in st.session_state:
+            st.session_state.debug_info.append(f"Error: {str(e)}")
 
 # Tampilkan tombol download jika sudah siap
-if st.session_state.download_ready:
+if st.session_state.get('download_ready', False):
     st.subheader("💾 Download RAB Terupdate")
     st.download_button(
         label="⬇️ Download RAB Excel",
@@ -189,12 +193,16 @@ if st.session_state.download_ready:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # Tampilkan debug info
-    with st.expander("Debug Information"):
-        for info in st.session_state.debug_info:
-            st.write(info)
+    # Tampilkan debug info dengan pengecekan
+    if 'debug_info' in st.session_state and st.session_state.debug_info:
+        with st.expander("Debug Information"):
+            for info in st.session_state.debug_info:
+                st.write(info)
 
     if st.button("🔄 Buat Input Baru"):
-        st.session_state.download_ready = False
-        st.session_state.download_data = None
+        st.session_state.update({
+            'download_ready': False,
+            'download_data': None,
+            'debug_info': []
+        })
         st.rerun()

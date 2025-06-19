@@ -42,9 +42,9 @@ with st.form("boq_form"):
     st.subheader("🔹 Input Kabel")
     col1, col2 = st.columns(2)
     with col1:
-        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=0, key="kabel_12")
+        kabel_12 = st.number_input("Panjang Kabel 12 Core (meter)", min_value=0.0, value=0.0, key="kabel_12")
     with col2:
-        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=0, key="kabel_24")
+        kabel_24 = st.number_input("Panjang Kabel 24 Core (meter)", min_value=0.0, value=0.0, key="kabel_24")
     
     # Section 3: Input ODP (8 dan 16 terpisah)
     st.subheader("🔹 Input ODP")

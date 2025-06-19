@@ -13,7 +13,7 @@ if 'download_ready' not in st.session_state:
         'download_ready': False,
         'download_data': None,
         'lop_name': "",
-        'debug_info': []  # Pastikan debug_info selalu ada sebagai list
+        'debug_info': []
     })
 
 # Fungsi untuk memetakan designator ke kode RAB
@@ -37,6 +37,17 @@ def get_rab_code(designator):
         "Preliminary Project HRB/Kawasan Khusus": "IZIN-KHUSUS-001"
     }
     return mapping.get(designator, "")
+
+# Fungsi validasi input
+def validate_project_inputs(lop_name, project_name, sto_code):
+    errors = []
+    if len(lop_name.strip()) < 3:
+        errors.append("Nama LOP harus minimal 3 karakter")
+    if len(project_name.strip()) < 5:
+        errors.append("Nama Project harus minimal 5 karakter")
+    if not sto_code.strip():
+        errors.append("Kode STO harus diisi")
+    return errors
 
 # Form Input
 with st.form("boq_form"):
@@ -74,8 +85,11 @@ with st.form("boq_form"):
     submitted = st.form_submit_button("🚀 Proses BOQ")
 
 if submitted:
-    if not all([lop_name, project_name, sto_code]):
-        st.warning("Harap lengkapi data proyek!")
+    # Validasi input
+    validation_errors = validate_project_inputs(lop_name, project_name, sto_code)
+    if validation_errors:
+        for error in validation_errors:
+            st.error(error)
         st.stop()
     
     if not uploaded_file:
@@ -88,35 +102,40 @@ if submitted:
         
         # Hitung volume
         total_odp = odp_8 + odp_16
-        vol_kabel_12 = round((kabel_12 * 1.02) + (total_odp if sumber == "ODC" else 0)) if kabel_12 > 0 else 0
-        vol_kabel_24 = round((kabel_24 * 1.02) + (total_odp if sumber == "ODC" else 0)) if kabel_24 > 0 else 0
+        vol_kabel_12 = round((kabel_12 * 1.02) + (total_odp if sumber == "ODC" else 0) if kabel_12 > 0 else 0
+        vol_kabel_24 = round((kabel_24 * 1.02) + (total_odp if sumber == "ODC" else 0) if kabel_24 > 0 else 0
         vol_puas = (total_odp * 2 - 1) if total_odp > 1 else (1 if total_odp == 1 else 0)
         vol_puas += tiang_new + tiang_existing + tikungan
 
-        # Daftar item dengan volume
+        # Daftar item dengan volume (0 instead of None)
         items = [
-            {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12 if kabel_12 > 0 else None},
-            {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24 if kabel_24 > 0 else None},
-            {"designator": "ODP Solid-PB-8 AS", "volume": odp_8 if odp_8 > 0 else None},
-            {"designator": "ODP Solid-PB-16 AS", "volume": odp_16 if odp_16 > 0 else None},
-            {"designator": "PU-S7.0-400NM", "volume": tiang_new if tiang_new > 0 else None},
+            {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
+            {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
+            {"designator": "ODP Solid-PB-8 AS", "volume": odp_8},
+            {"designator": "ODP Solid-PB-16 AS", "volume": odp_16},
+            {"designator": "PU-S7.0-400NM", "volume": tiang_new},
             {"designator": "PU-AS", "volume": vol_puas},
-            {"designator": "OS-SM-1-ODC", "volume": (12 if kabel_12 > 0 else 24 if kabel_24 > 0 else 0) + total_odp if sumber == "ODC" else None},
-            {"designator": "TC-02-ODC", "volume": 1 if sumber == "ODC" else None},
-            {"designator": "DD-HDPE-40-1", "volume": 6 if sumber == "ODC" else None},
-            {"designator": "BC-TR-0.6", "volume": 6 if sumber == "ODC" else None},
-            {"designator": "PS-1-4-ODC", "volume": (total_odp - 1) // 4 + 1 if sumber == "ODC" and total_odp > 0 else None},
-            {"designator": "OS-SM-1-ODP", "volume": total_odp * 2 if sumber == "ODP" else None},
+            {"designator": "OS-SM-1-ODC", "volume": (12 if kabel_12 > 0 else 24 if kabel_24 > 0 else 0) + total_odp if sumber == "ODC" else 0},
+            {"designator": "TC-02-ODC", "volume": 1 if sumber == "ODC" else 0},
+            {"designator": "DD-HDPE-40-1", "volume": 6 if sumber == "ODC" else 0},
+            {"designator": "BC-TR-0.6", "volume": 6 if sumber == "ODC" else 0},
+            {"designator": "PS-1-4-ODC", "volume": (total_odp - 1) // 4 + 1 if sumber == "ODC" and total_odp > 0 else 0},
+            {"designator": "OS-SM-1-ODP", "volume": total_odp * 2 if sumber == "ODP" else 0},
             {"designator": "OS-SM-1", "volume": ((12 if kabel_12 > 0 else 24 if kabel_24 > 0 else 0) + total_odp) if sumber == "ODC" else (total_odp * 2)},
             {"designator": "PC-UPC-652-2", "volume": (total_odp - 1) // 4 + 1 if total_odp > 0 else 0},
             {"designator": "PC-APC/UPC-652-A1", "volume": 18 if ((total_odp - 1) // 4 + 1) == 1 else (((total_odp - 1) // 4 + 1) * 2 if ((total_odp - 1) // 4 + 1) > 1 else 0)},
-            {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if izin else None}
+            {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if izin else 0}
         ]
 
         # Baca template
         wb = openpyxl.load_workbook(uploaded_file)
         ws = wb.active
         
+        # Validasi template
+        if ws['B1'].value != "DATA MATERIAL SATUAN":
+            st.error("Template format tidak valid! Pastikan menggunakan template yang benar.")
+            st.stop()
+
         # Debug info
         st.session_state.debug_info.append(f"File loaded: {uploaded_file.name}")
         st.session_state.debug_info.append(f"Sheet name: {ws.title}")
@@ -180,8 +199,7 @@ if submitted:
 
     except Exception as e:
         st.error(f"Error: {str(e)}")
-        if 'debug_info' in st.session_state:
-            st.session_state.debug_info.append(f"Error: {str(e)}")
+        st.session_state.debug_info.append(f"Error: {str(e)}")
 
 # Tampilkan tombol download jika sudah siap
 if st.session_state.get('download_ready', False):
@@ -193,8 +211,8 @@ if st.session_state.get('download_ready', False):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # Tampilkan debug info dengan pengecekan
-    if 'debug_info' in st.session_state and st.session_state.debug_info:
+    # Tampilkan debug info
+    if st.session_state.debug_info:
         with st.expander("Debug Information"):
             for info in st.session_state.debug_info:
                 st.write(info)

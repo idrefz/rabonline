@@ -201,8 +201,8 @@ if st.session_state.boq_state.get('ready', False):
     st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
 
     if st.button("🔄 Buat BOQ Baru"):
-        st.session_state.boq_state = {'ready': False}
-        st.rerun()
+        st.session_state.clear()
+        st.experimental_rerun()
 
 if not st.session_state.boq_state['ready']:
     st.info("⬆️ Isi form dan unggah file template BOQ untuk mulai.")

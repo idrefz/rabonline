@@ -1,4 +1,4 @@
-import streamlit as st
+""import streamlit as st
 import pandas as pd
 from io import BytesIO
 import openpyxl
@@ -69,24 +69,22 @@ def calculate_volumes(inputs):
 # ======================
 # 🗅️ FORM UI
 # ======================
-submitted = False
 with st.form("boq_form"):
-    st.subheader("📋 Project Info")
-    lop_name = st.text_input("Nama LOP")
-    sumber = st.radio("Sumber", ["ODC", "ODP"], index=0)
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        lop_name = st.text_input("Nama LOP")
+    with col2:
+        sumber = st.radio("Sumber", ["ODC", "ODP"], index=0)
 
-    st.subheader("🛍️ Cable")
     kabel_12 = st.number_input("12 Core Cable (m)", min_value=0.0, value=0.0)
     kabel_24 = st.number_input("24 Core Cable (m)", min_value=0.0, value=0.0)
-
-    st.subheader("🏗️ ODP")
     odp_8 = st.number_input("ODP 8 Port", min_value=0, value=0)
     odp_16 = st.number_input("ODP 16 Port", min_value=0, value=0)
 
-    st.subheader("🪜 Support")
-    tiang_new = st.number_input("Tiang Baru", min_value=0, value=0)
-    tiang_existing = st.number_input("Tiang Eksisting", min_value=0, value=0)
-    tikungan = st.number_input("Tikungan", min_value=0, value=0)
+    col1, col2, col3 = st.columns(3)
+    tiang_new = col1.number_input("Tiang Baru", min_value=0, value=0)
+    tiang_existing = col2.number_input("Tiang Eksisting", min_value=0, value=0)
+    tikungan = col3.number_input("Tikungan", min_value=0, value=0)
 
     izin = st.text_input("Preliminary (isi nominal jika ada)", value="")
     uploaded_file = st.file_uploader("Unggah Template BOQ", type=["xlsx"])
@@ -117,32 +115,29 @@ if submitted:
         items = calculate_volumes(input_data)
 
         updated_count = 0
-        special_permit_added = False
-
         for row in range(9, 289):
             designator = str(ws[f'B{row}'].value or "").strip()
 
-            if not special_permit_added and izin and row > 9 and not ws[f'B{row}'].value:
+            if izin and designator == "" and "Preliminary Project HRB/Kawasan Khusus" not in [str(ws[f'B{r}'].value) for r in range(9, 289)]:
                 ws[f'B{row}'] = "Preliminary Project HRB/Kawasan Khusus"
                 ws[f'F{row}'] = float(izin)
                 ws[f'G{row}'] = 1
-                special_permit_added = True
                 updated_count += 1
                 continue
 
             for item in items:
                 if item["volume"] > 0 and designator == item["designator"]:
+                    ws[f'G{row}'] = item["volume"]
                     if designator == "Preliminary Project HRB/Kawasan Khusus":
                         ws[f'F{row}'] = item.get("izin_value", 0)
-                    ws[f'G{row}'] = item["volume"]
                     updated_count += 1
                     break
 
-        # Manual calculation of total material
+        # Calculation of material and jasa
         material = 0.0
         jasa = 0.0
         for row in range(9, 289):
-            harga = ws[f'F{row}'].value
+            harga = ws[f'E{row}'].value
             volume = ws[f'G{row}'].value
             try:
                 harga = float(harga) if harga is not None else 0.0
@@ -150,6 +145,14 @@ if submitted:
                 material += harga * volume
             except:
                 continue
+
+            harga_jasa = ws[f'F{row}'].value
+            try:
+                harga_jasa = float(harga_jasa) if harga_jasa is not None else 0.0
+                jasa += harga_jasa * volume
+            except:
+                continue
+
         total = material + jasa
         cpp = round((odp_8 + odp_16) * 8 / total if total else 0, 4)
 
@@ -201,9 +204,6 @@ if st.session_state.boq_state.get('ready', False):
     st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
 
     if st.button("🔄 Buat BOQ Baru"):
-        for key in ["kabel_12", "kabel_24", "odp_8", "odp_16", "tiang_new", "tiang_existing", "tikungan", "izin", "uploaded_file"]:
-            if key in st.session_state:
-                del st.session_state[key]
         st.session_state.boq_state = {'ready': False}
         st.rerun()
 

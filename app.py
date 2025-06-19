@@ -16,7 +16,8 @@ if 'boq_state' not in st.session_state:
         'ready': False,
         'excel_data': None,
         'project_name': "",
-        'updated_items': []
+        'updated_items': [],
+        'summary': {}
     }
 
 # ======================
@@ -49,10 +50,7 @@ def calculate_volumes(inputs):
     vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
     vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
 
-    if total_odp == 0:
-        vol_pc_upc = 0
-    else:
-        vol_pc_upc = ((total_odp - 1) // 4) + 1
+    vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
 
     if vol_pc_upc == 1:
         vol_pc_apc = 18
@@ -61,10 +59,7 @@ def calculate_volumes(inputs):
     else:
         vol_pc_apc = 0
 
-    if inputs['sumber'] == "ODC" and total_odp > 0:
-        vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1
-    else:
-        vol_ps_1_4_odc = 0
+    vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0
 
     vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
     vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
@@ -86,7 +81,7 @@ def calculate_volumes(inputs):
         {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
-        {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if inputs['izin'] else 0}
+        {"designator": "Preliminary Project HRB/Kawasan Khusus", "volume": 1 if inputs['izin'] else 0, "izin_value": inputs['izin']}
     ]
 
 # ======================
@@ -162,15 +157,18 @@ if submitted:
         items = calculate_volumes(input_data)
 
         updated_count = 0
+        material = 0.0
+        jasa = 0.0
         special_permit_added = False
 
         for row in range(9, 289):
             designator = str(ws[f'B{row}'].value or "").strip()
-
-            if not special_permit_added and izin and row > 9 and not ws[f'B{row}'].value:
+            harga_satuan = ws[f'F{row}'].value or 0
+            if not special_permit_added and izin and not ws[f'B{row}'].value:
                 ws[f'B{row}'] = "Preliminary Project HRB/Kawasan Khusus"
                 ws[f'F{row}'] = izin
                 ws[f'G{row}'] = 1
+                jasa += float(izin)
                 special_permit_added = True
                 updated_count += 1
                 continue
@@ -178,6 +176,14 @@ if submitted:
             for item in items:
                 if item["volume"] > 0 and designator == item["designator"]:
                     ws[f'G{row}'] = item["volume"]
+                    try:
+                        subtotal = float(harga_satuan) * item["volume"]
+                        if "Preliminary" in designator:
+                            jasa += subtotal
+                        else:
+                            material += subtotal
+                    except:
+                        pass
                     updated_count += 1
                     break
 
@@ -185,17 +191,33 @@ if submitted:
         wb.save(output)
         output.seek(0)
 
+        total = material + jasa
+        cpp = ((odp_8 + odp_16) * 8) / total if total > 0 else 0
+
         st.session_state.boq_state = {
             'ready': True,
             'excel_data': output,
             'project_name': lop_name,
-            'updated_items': [item for item in items if item['volume'] > 0]
+            'updated_items': [item for item in items if item['volume'] > 0],
+            'summary': {
+                'material': material,
+                'jasa': jasa,
+                'total': total,
+                'cpp': cpp
+            }
         }
 
         st.success(f"✅ Successfully updated {updated_count} items!")
 
         with st.expander("📋 Updated Items"):
             st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
+
+        st.subheader("📌 Summary")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("MATERIAL", f"Rp {material:,.2f}")
+        col2.metric("JASA", f"Rp {jasa:,.2f}")
+        col3.metric("TOTAL", f"Rp {total:,.2f}")
+        col4.metric("CPP", f"{cpp:.4f}")
 
     except Exception as e:
         st.error(f"Error processing BOQ: {str(e)}")

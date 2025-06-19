@@ -255,3 +255,13 @@ if st.session_state.downloaded:
             sheet.update_cell(i+1, 7, "0")
         reset_form()
         st.rerun()
+
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+try:
+    # kode download
+except Exception as e:
+    logger.error(f"Error downloading spreadsheet: {str(e)}", exc_info=True)
+    st.error("Terjadi kesalahan teknis. Silakan coba lagi atau hubungi administrator.")

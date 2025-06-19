@@ -274,7 +274,6 @@ with st.form("boq_form"):
             key='odp_8_input'
         )
         
-        # Pole recommendation section
         tikungan = st.number_input(
             "Tikungan*",
             min_value=0,
@@ -284,6 +283,7 @@ with st.form("boq_form"):
         )
         
         # Calculate recommended poles
+        recommended_poles = 0
         if kabel_12 > 0 or kabel_24 > 0:
             total_kabel = kabel_12 if kabel_12 > 0 else kabel_24
             recommended_poles = (total_kabel // 45) + 1 + tikungan
@@ -338,6 +338,7 @@ with st.form("boq_form"):
         help="File template Excel format BOQ"
     )
 
+    # PROPER SUBMIT BUTTON IMPLEMENTATION
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
 # ======================

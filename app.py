@@ -89,27 +89,18 @@ with st.form("boq_form"):
     with col2:
         sumber = st.radio("Sumber", ["ODC", "ODP"], index=0)
 
-    with st.container():
-        col1, col2 = st.columns(2)
-        kabel_12 = col1.number_input("12 Core Cable (m)", min_value=0.0, value=0.0)
-        kabel_24 = col2.number_input("24 Core Cable (m)", min_value=0.0, value=0.0)
-
-        col1, col2 = st.columns(2)
-        odp_8 = col1.number_input("ODP 8 Port", min_value=0, value=0)
-        odp_16 = col2.number_input("ODP 16 Port", min_value=0, value=0)
-
-        col1, col2, col3 = st.columns(3)
-        tiang_new = col1.number_input("Tiang Baru", min_value=0, value=0)
-        tiang_existing = col2.number_input("Tiang Eksisting", min_value=0, value=0)
-        tikungan = col3.number_input("Tikungan", min_value=0, value=0)
+    kabel_12 = st.number_input("12 Core Cable (m)", min_value=0.0, value=0.0, key="kabel_12")
+    kabel_24 = st.number_input("24 Core Cable (m)", min_value=0.0, value=0.0, key="kabel_24")
+    odp_8 = st.number_input("ODP 8 Port", min_value=0, value=0, key="odp_8")
+    odp_16 = st.number_input("ODP 16 Port", min_value=0, value=0, key="odp_16")
+    tiang_new = st.number_input("Tiang Baru", min_value=0, value=0, key="tiang_new")
+    tiang_existing = st.number_input("Tiang Eksisting", min_value=0, value=0, key="tiang_existing")
+    tikungan = st.number_input("Tikungan", min_value=0, value=0, key="tikungan")
 
     izin = st.text_input("Preliminary (isi nominal jika ada)", value="")
     uploaded_file = st.file_uploader("Unggah Template BOQ", type=["xlsx"])
     submitted = st.form_submit_button("🚀 Generate BOQ")
 
-# ======================
-# 🔄 PROCESSING & OUTPUT
-# ======================
 if submitted:
     if not uploaded_file or not lop_name:
         st.warning("Lengkapi Nama LOP dan unggah file template!")
@@ -156,11 +147,13 @@ if submitted:
                 h_mat = ws[f'E{row}'].value
                 h_jasa = ws[f'F{row}'].value
                 vol = ws[f'G{row}'].value
-                h_mat = float(h_mat) if isinstance(h_mat, (int, float)) or (isinstance(h_mat, str) and h_mat.replace('.', '', 1).isdigit()) else 0
-                h_jasa = float(h_jasa) if isinstance(h_jasa, (int, float)) or (isinstance(h_jasa, str) and h_jasa.replace('.', '', 1).isdigit()) else 0
-                vol = float(vol) if vol else 0
-                material += h_mat * vol
-                jasa += h_jasa * vol
+
+                if all(isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.', '', 1).isdigit()) for v in [h_mat, h_jasa, vol]):
+                    h_mat = float(h_mat)
+                    h_jasa = float(h_jasa)
+                    vol = float(vol)
+                    material += h_mat * vol
+                    jasa += h_jasa * vol
             except:
                 continue
 
@@ -211,14 +204,8 @@ if st.session_state.boq_state.get('ready', False):
     st.dataframe(pd.DataFrame(st.session_state.boq_state['updated_items']))
 
     if st.button("🔄 Buat BOQ Baru"):
-        st.session_state.boq_state = {
-            'ready': False,
-            'excel_data': None,
-            'project_name': "",
-            'updated_items': [],
-            'summary': {}
-        }
-        st.experimental_rerun()
-
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 else:
     st.info("⬆️ Isi form dan unggah template untuk memulai.")

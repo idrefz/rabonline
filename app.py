@@ -93,6 +93,10 @@ if st.button("Proses BOQ"):
         match = df[df["Designator"] == designator_cell]
         if not match.empty:
             volume = match["Volume"].values[0]
+            if designator_cell == "Preliminary Project HRB/Kawasan Khusus":
+            sheet.update_cell(i + 1, 6, int(volume))  # Kolom F
+            sheet.update_cell(i + 1, 7, 1)            # Kolom G
+        else:
             sheet.update_cell(i + 1, 7, int(volume))
 
     # Tampilkan tabel hasil BOQ
@@ -122,11 +126,18 @@ if st.button("Proses BOQ"):
     # Proteksi download
     password = st.text_input("Masukkan password untuk download", type="password")
     if password == "sdibisa":
-output = BytesIO()
-df.to_excel(output, index=False, engine='openpyxl')
-output.seek(0)  # penting!
-st.download_button("⬇️ Download Excel", output, file_name=f"{lop_name}.xlsx")
+        output = BytesIO()
+        df.to_excel(output, index=False, engine='openpyxl')
+        output.seek(0)
+        st.download_button("⬇️ Download Excel", output, file_name=f"{lop_name}.xlsx")
 
+        # Reset semua kolom G dan F untuk Preliminary Project HRB/Kawasan Khusus
+        for i in range(8, len(values)):
+            if values[i][1] == "Preliminary Project HRB/Kawasan Khusus":
+                sheet.update_cell(i + 1, 6, "0")
+            sheet.update_cell(i + 1, 7, "0")
+
+        st.success("Download selesai dan volume berhasil di-reset.")
 
     # Tombol reset
     if st.button("🔁 Input Lagi (Reset Volume ke 0)"):

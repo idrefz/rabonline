@@ -409,7 +409,15 @@ if submitted:
     if not lop_name:
         st.error("Harap isi nama LOP!")
         st.stop()
+    # Validasi tiang baru
+    if tiang_new < 0:
+        st.error("Jumlah tiang baru tidak boleh negatif!")
+        st.stop()
     
+    # Validasi closure
+    if jumlah_closure < 0:
+        st.error("Jumlah closure tidak boleh negatif!")
+        st.stop()
     # Validasi kabel
     is_adss = adss_12 > 0 or adss_24 > 0
     is_stock = kabel_12 > 0 or kabel_24 > 0

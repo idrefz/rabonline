@@ -3,7 +3,6 @@ import pandas as pd
 from io import BytesIO
 import openpyxl
 import math
-
 # ======================
 # 🎩 CONFIGURATION
 # ======================

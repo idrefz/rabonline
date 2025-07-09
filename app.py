@@ -408,7 +408,7 @@ if submitted:
         'kabel_12': kabel_12,
         'kabel_24': kabel_24,
         'adss_12': adss_12,
-        'adss_24': adss_24
+        'adss_24': adss_24,
         'odp_8': odp_8,
         'odp_16': odp_16,
         'tiang_new': tiang_new,

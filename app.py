@@ -271,14 +271,12 @@ def process_boq_template(uploaded_file, inputs, lop_name):
 # 🗅️ FORM UI
 # ======================
 with st.form("boq_form"):
-    # Common sections (appear in both tabs)
     st.subheader("📁 Informasi Proyek")
     col1, col2 = st.columns([2, 1])
     with col1:
         lop_name = st.text_input(
             "Nama LOP*",
             value=st.session_state.form_values['lop_name'],
-            key='lop_name_input',
             help="Masukkan nama LOP (contoh: LOP_JAKARTA_123)"
         )
     with col2:
@@ -286,185 +284,102 @@ with st.form("boq_form"):
             "Sumber*",
             ["ODC", "ODP"],
             index=0 if st.session_state.form_values['sumber'] == "ODC" else 1,
-            key='sumber_input',
             horizontal=True
         )
 
-    # Create tabs
-    tab1, tab2 = st.tabs(["📦 STOCK", "📡 ADSS"])
-    
-    # Shared logic for common fields
-    common_fields = {
-        'odp_8': st.session_state.form_values['odp_8'],
-        'odp_16': st.session_state.form_values['odp_16'],
-        'tiang_new': st.session_state.form_values['tiang_new'],
-        'tiang_existing': st.session_state.form_values['tiang_existing'],
-        'tikungan': st.session_state.form_values['tikungan'],
-        'izin': st.session_state.form_values['izin']
-    }
-    
-    with tab1:
-        # STOCK MATERIALS
-        st.subheader("Kebutuhan Material Stock")
-        col1, col2 = st.columns(2)
-        with col1:
-            kabel_12 = st.number_input(
-                "12 Core Cable (meter)*",
-                min_value=0.0,
-                value=st.session_state.form_values['kabel_12'],
-                key='kabel_12_input',
-                step=1.0,
-                format="%.1f"
-            )
-            common_fields['odp_8'] = st.number_input(
-                "ODP 8 Port*",
-                min_value=0,
-                value=common_fields['odp_8'],
-                key='odp_8_input'
-            )
-            common_fields['tiang_new'] = st.number_input(
-                "Tiang Baru*",
-                min_value=0,
-                value=common_fields['tiang_new'],
-                key='tiang_new_input'
-            )
-        with col2:
-            kabel_24 = st.number_input(
-                "24 Core Cable (meter)*",
-                min_value=0.0,
-                value=st.session_state.form_values['kabel_24'],
-                key='kabel_24_input',
-                step=1.0,
-                format="%.1f"
-            )
-            common_fields['odp_16'] = st.number_input(
-                "ODP 16 Port*",
-                min_value=0,
-                value=common_fields['odp_16'],
-                key='odp_16_input'
-            )
-            common_fields['tiang_existing'] = st.number_input(
-                "Tiang Eksisting*",
-                min_value=0,
-                value=common_fields['tiang_existing'],
-                key='tiang_existing_input'
-            )
-        
-        # Common in STOCK tab
-        common_fields['tikungan'] = st.number_input(
-            "Tikungan*",
+    st.subheader("📦 Kebutuhan Kabel")
+    col1, col2 = st.columns(2)
+    with col1:
+        kabel_12 = st.number_input(
+            "12 Core Cable STOCK (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['kabel_12'],
+            step=1.0,
+            format="%.1f"
+        )
+        kabel_24 = st.number_input(
+            "24 Core Cable STOCK (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['kabel_24'],
+            step=1.0,
+            format="%.1f"
+        )
+    with col2:
+        adss_12 = st.number_input(
+            "ADSS 12 Core (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['adss_12'],
+            step=1.0,
+            format="%.1f"
+        )
+        adss_24 = st.number_input(
+            "ADSS 24 Core (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['adss_24'],
+            step=1.0,
+            format="%.1f"
+        )
+
+    st.subheader("📊 Kebutuhan ODP & Tiang")
+    col1, col2 = st.columns(2)
+    with col1:
+        odp_8 = st.number_input(
+            "ODP 8 Port*",
             min_value=0,
-            value=common_fields['tikungan'],
-            key='tikungan_input'
+            value=st.session_state.form_values['odp_8']
         )
-        common_fields['izin'] = st.text_input(
-            "Preliminary (isi nominal jika ada)",
-            value=common_fields['izin'],
-            key='izin_input',
-            help="Masukkan nilai dalam rupiah (contoh: 500000)"
-        )
-
-    with tab2:
-        # ADSS MATERIALS
-        st.subheader("Kebutuhan Material ADSS")
-        col1, col2 = st.columns(2)
-        with col1:
-            adss_12 = st.number_input(
-                "ADSS 12 Core (meter)",
-                min_value=0.0,
-                value=st.session_state.form_values['adss_12'],
-                key='adss_12_input',
-                step=1.0,
-                format="%.1f"
-            )
-            st.number_input(
-                "ODP 8 Port (ADSS)",
-                min_value=0,
-                value=common_fields['odp_8'],
-                key='odp_8_adss_display',
-                disabled=True
-            )
-            st.number_input(
-                "Tiang Baru (ADSS)",
-                min_value=0,
-                value=common_fields['tiang_new'],
-                key='tiang_new_adss_display',
-                disabled=True
-            )
-            pos_odp_raw = st.text_input(
-                "Posisi Tiang ODP (misal: 5,9,14)", 
-                value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
-                key='pos_odp_input'
-            )
-        with col2:
-            adss_24 = st.number_input(
-                "ADSS 24 Core (meter)",
-                min_value=0.0,
-                value=st.session_state.form_values['adss_24'],
-                key='adss_24_input',
-                step=1.0,
-                format="%.1f"
-            )
-            st.number_input(
-                "ODP 16 Port (ADSS)",
-                min_value=0,
-                value=common_fields['odp_16'],
-                key='odp_16_adss_display',
-                disabled=True
-            )
-            st.number_input(
-                "Tiang Eksisting (ADSS)",
-                min_value=0,
-                value=common_fields['tiang_existing'],
-                key='tiang_existing_adss_display',
-                disabled=True
-            )
-            pos_belokan_raw = st.text_input(
-                "Posisi Tikungan (misal: 7,13)", 
-                value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
-                key='pos_belokan_input'
-            )
-        
-        # Display-only common fields for ADSS
-        st.number_input(
-            "Tikungan (ADSS)",
+        tiang_new = st.number_input(
+            "Tiang Baru*",
             min_value=0,
-            value=common_fields['tikungan'],
-            key='tikungan_adss_display',
-            disabled=True
+            value=st.session_state.form_values['tiang_new']
         )
-        st.text_input(
-            "Preliminary ADSS",
-            value=common_fields['izin'],
-            key='izin_adss_display',
-            disabled=True
+    with col2:
+        odp_16 = st.number_input(
+            "ODP 16 Port*",
+            min_value=0,
+            value=st.session_state.form_values['odp_16']
+        )
+        tiang_existing = st.number_input(
+            "Tiang Eksisting*",
+            min_value=0,
+            value=st.session_state.form_values['tiang_existing']
         )
 
-        # Process position inputs
-        posisi_odp = []
-        posisi_belokan = []
-        try:
-            posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
-            posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
-            
-            # Validate positions are positive
-            if any(p <= 0 for p in posisi_odp) or any(p <= 0 for p in posisi_belokan):
-                st.error("Posisi harus berupa angka positif")
-                st.stop()
-        except Exception as e:
-            st.error(f"Format posisi tidak valid: {str(e)}")
-            st.stop()
+    st.subheader("📍 Posisi ODP & Tikungan (Khusus ADSS)")
+    col1, col2 = st.columns(2)
+    with col1:
+        pos_odp_raw = st.text_input(
+            "Posisi Tiang ODP (misal: 5,9,14)", 
+            value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
+            help="Diisi hanya jika menggunakan kabel ADSS"
+        )
+    with col2:
+        pos_belokan_raw = st.text_input(
+            "Posisi Tikungan (misal: 7,13)", 
+            value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
+            help="Diisi hanya jika menggunakan kabel ADSS"
+        )
 
-    # FILE UPLOAD
+    st.subheader("⚙️ Konfigurasi Tambahan")
+    tikungan = st.number_input(
+        "Jumlah Tikungan*",
+        min_value=0,
+        value=st.session_state.form_values['tikungan'],
+        help="Total tikungan dalam rute"
+    )
+    izin = st.text_input(
+        "Preliminary Project (Rp)",
+        value=st.session_state.form_values['izin'],
+        help="Masukkan nilai dalam rupiah (contoh: 500000)"
+    )
+
     st.subheader("📤 Template File")
     uploaded_file = st.file_uploader(
         "Unggah Template BOQ*",
         type=["xlsx"],
-        key='uploaded_file_input',
         help="File template Excel format BOQ"
     )
 
-    # SUBMIT BUTTON
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
 # ======================

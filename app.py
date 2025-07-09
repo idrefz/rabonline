@@ -386,31 +386,37 @@ with st.form("boq_form"):
 # 🚀 FORM SUBMISSION
 # ======================
 if submitted:
-    # Validate required fields
-    if not uploaded_file:
-        st.error("Silakan unggah file template BOQ!")
-        st.stop()
-    if not lop_name:
-        st.error("Silakan isi nama LOP!")
-        st.stop()
-    
-    # Validate izin is numeric if provided
-    if common_fields['izin'] and not common_fields['izin'].replace(',', '').replace('.', '').isdigit():
+    # Validasi izin
+    if izin and not izin.replace(',', '').replace('.', '').isdigit():
         st.error("Nilai preliminary harus berupa angka!")
         st.stop()
     
-    # Validate cable selection
+    # Validasi jenis kabel
     is_stock = kabel_12 > 0 or kabel_24 > 0
     is_adss = adss_12 > 0 or adss_24 > 0
     
     if is_stock and is_adss:
-        st.error("Silakan pilih hanya satu jenis kabel (STOCK ATAU ADSS)")
+        st.error("Pilih hanya satu jenis kabel (STOCK ATAU ADSS)")
         st.stop()
     if not is_stock and not is_adss:
-        st.error("Silakan pilih minimal satu jenis kabel (STOCK atau ADSS)")
+        st.error("Harap pilih minimal satu jenis kabel")
         st.stop()
 
-    # Update session state with current form values
+    # Proses posisi ODP dan tikungan
+    posisi_odp = []
+    posisi_belokan = []
+    try:
+        posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
+        posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
+        
+        if any(p <= 0 for p in posisi_odp) or any(p <= 0 for p in posisi_belokan):
+            st.error("Posisi harus berupa angka positif")
+            st.stop()
+    except Exception as e:
+        st.error(f"Format posisi tidak valid: {str(e)}")
+        st.stop()
+
+    # Update session state
     st.session_state.form_values = {
         'lop_name': lop_name,
         'sumber': sumber,
@@ -418,12 +424,12 @@ if submitted:
         'kabel_24': kabel_24,
         'adss_12': adss_12,
         'adss_24': adss_24,
-        'odp_8': common_fields['odp_8'],
-        'odp_16': common_fields['odp_16'],
-        'tiang_new': common_fields['tiang_new'],
-        'tiang_existing': common_fields['tiang_existing'],
-        'tikungan': common_fields['tikungan'],
-        'izin': common_fields['izin'],
+        'odp_8': odp_8,
+        'odp_16': odp_16,
+        'tiang_new': tiang_new,
+        'tiang_existing': tiang_existing,
+        'tikungan': tikungan,
+        'izin': izin,
         'posisi_odp': posisi_odp,
         'posisi_belokan': posisi_belokan,
         'uploaded_file': uploaded_file

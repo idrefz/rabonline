@@ -265,24 +265,6 @@ def process_boq_template(uploaded_file, inputs, lop_name):
 # 🗅️ FORM UI
 # ======================
 with st.form("boq_form"):
-    # === ADSS SECTION ===
-    st.subheader("📡 Kabel ADSS (opsional, jika bukan kabel stock)")
-    col_adss1, col_adss2 = st.columns(2)
-    with col_adss1:
-        adss_12 = st.number_input("ADSS 12 Core (meter)", min_value=0.0, value=0.0, step=1.0)
-    with col_adss2:
-        adss_24 = st.number_input("ADSS 24 Core (meter)", min_value=0.0, value=0.0, step=1.0)
-
-    st.subheader("📍 Posisi ODP dan Tikungan (khusus ADSS)")
-    col_pos1, col_pos2 = st.columns(2)
-    with col_pos1:
-        pos_odp_raw = st.text_input("Posisi Tiang ODP (misal: 5,9,14)", value="")
-    with col_pos2:
-        pos_belokan_raw = st.text_input("Posisi Tikungan (misal: 7,13)", value="")
-
-    posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
-    posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
-
     # === PROJECT INFO ===
     st.subheader("📁 Informasi Proyek")
     col1, col2 = st.columns([2, 1])
@@ -359,6 +341,25 @@ with st.form("boq_form"):
             key='izin_input',
             help="Masukkan nilai dalam rupiah (contoh: 500000)"
         )
+
+    # === ADSS SECTION ===
+    st.subheader("📡 Kabel ADSS (opsional, jika bukan kabel stock)")
+    col_adss1, col_adss2 = st.columns(2)
+    with col_adss1:
+        adss_12 = st.number_input("ADSS 12 Core (meter)", min_value=0.0, value=0.0, step=1.0)
+    with col_adss2:
+        adss_24 = st.number_input("ADSS 24 Core (meter)", min_value=0.0, value=0.0, step=1.0)
+
+    # === ODP POSITION AND BENDS ===
+    st.subheader("📍 Posisi ODP dan Tikungan (khusus ADSS)")
+    col_pos1, col_pos2 = st.columns(2)
+    with col_pos1:
+        pos_odp_raw = st.text_input("Posisi Tiang ODP (misal: 5,9,14)", value="")
+    with col_pos2:
+        pos_belokan_raw = st.text_input("Posisi Tikungan (misal: 7,13)", value="")
+
+    posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
+    posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
 
     # === FILE UPLOAD ===
     st.subheader("📤 Template File")

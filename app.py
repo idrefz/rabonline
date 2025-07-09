@@ -37,38 +37,8 @@ st.title("📊 BOQ Generator (Custom Rules)")
 # 🔄 STATE MANAGEMENT
 # ======================
 def initialize_session_state():
-    """Initialize all session state variables"""
-    if 'form_values' not in st.session_state:
-        st.session_state.form_values = {
-            'lop_name': "",
-            'sumber': "ODC",
-            'kabel_12': 0.0,
-            'kabel_24': 0.0,
-            'adss_12': 0.0,
-            'adss_24': 0.0,
-            'odp_8': 0,
-            'odp_16': 0,
-            'tiang_new': 0,
-            'tiang_existing': 0,
-            'tikungan': 0,
-            'izin': "",
-            'posisi_odp': [],
-            'posisi_belokan': [],
-            'uploaded_file': None
-        }
-    
-    if 'boq_state' not in st.session_state:
-        st.session_state.boq_state = {
-            'ready': False,
-            'excel_data': None,
-            'project_name': "",
-            'updated_items': [],
-            'summary': {}
-        }
-
-def reset_application():
-    """Reset the entire application state"""
-    st.session_state.form_values = {
+    """Initialize all session state variables with proper defaults"""
+    defaults = {
         'lop_name': "",
         'sumber': "ODC",
         'kabel_12': 0.0,
@@ -85,13 +55,23 @@ def reset_application():
         'posisi_belokan': [],
         'uploaded_file': None
     }
-    st.session_state.boq_state = {
-        'ready': False,
-        'excel_data': None,
-        'project_name': "",
-        'updated_items': [],
-        'summary': {}
-    }
+    
+    if 'form_values' not in st.session_state:
+        st.session_state.form_values = defaults.copy()
+    
+    if 'boq_state' not in st.session_state:
+        st.session_state.boq_state = {
+            'ready': False,
+            'excel_data': None,
+            'project_name': "",
+            'updated_items': [],
+            'summary': {}
+        }
+
+def reset_application():
+    """Reset the entire application state"""
+    initialize_session_state()  # Reinitialize with defaults
+    st.rerun()
 
 # Initialize the application
 initialize_session_state()
@@ -100,6 +80,7 @@ initialize_session_state()
 # 🔧 CORE FUNCTIONS
 # ======================
 def hitung_puas_hl(n_tiang, source='ODC', posisi_odp=[]):
+    """Calculate PU-AS-HL count"""
     puas_hl = 0
     counter = 0
     for i in range(n_tiang):
@@ -118,6 +99,7 @@ def hitung_puas_hl(n_tiang, source='ODC', posisi_odp=[]):
     return puas_hl
 
 def hitung_puas_sc(posisi_odp, posisi_belokan):
+    """Calculate PU-AS-SC count"""
     return sum([2 if i in posisi_belokan else 3 for i in posisi_odp])
 
 def calculate_volumes(inputs):
@@ -277,7 +259,7 @@ with st.form("boq_form"):
     with col1:
         lop_name = st.text_input(
             "Nama LOP*",
-            value=st.session_state.form_values['lop_name'],
+            value=st.session_state.form_values.get('lop_name', ''),
             key='lop_name_input',
             help="Masukkan nama LOP (contoh: LOP_JAKARTA_123)"
         )
@@ -285,7 +267,7 @@ with st.form("boq_form"):
         sumber = st.radio(
             "Sumber*",
             ["ODC", "ODP"],
-            index=0 if st.session_state.form_values['sumber'] == "ODC" else 1,
+            index=0 if st.session_state.form_values.get('sumber', 'ODC') == "ODC" else 1,
             key='sumber_input',
             horizontal=True
         )
@@ -295,12 +277,12 @@ with st.form("boq_form"):
     
     # Shared logic for common fields
     common_fields = {
-        'odp_8': st.session_state.form_values['odp_8'],
-        'odp_16': st.session_state.form_values['odp_16'],
-        'tiang_new': st.session_state.form_values['tiang_new'],
-        'tiang_existing': st.session_state.form_values['tiang_existing'],
-        'tikungan': st.session_state.form_values['tikungan'],
-        'izin': st.session_state.form_values['izin']
+        'odp_8': st.session_state.form_values.get('odp_8', 0),
+        'odp_16': st.session_state.form_values.get('odp_16', 0),
+        'tiang_new': st.session_state.form_values.get('tiang_new', 0),
+        'tiang_existing': st.session_state.form_values.get('tiang_existing', 0),
+        'tikungan': st.session_state.form_values.get('tikungan', 0),
+        'izin': st.session_state.form_values.get('izin', '')
     }
     
     with tab1:
@@ -311,7 +293,7 @@ with st.form("boq_form"):
             kabel_12 = st.number_input(
                 "12 Core Cable (meter)*",
                 min_value=0.0,
-                value=st.session_state.form_values['kabel_12'],
+                value=st.session_state.form_values.get('kabel_12', 0.0),
                 key='kabel_12_input',
                 step=1.0,
                 format="%.1f"
@@ -332,7 +314,7 @@ with st.form("boq_form"):
             kabel_24 = st.number_input(
                 "24 Core Cable (meter)*",
                 min_value=0.0,
-                value=st.session_state.form_values['kabel_24'],
+                value=st.session_state.form_values.get('kabel_24', 0.0),
                 key='kabel_24_input',
                 step=1.0,
                 format="%.1f"
@@ -372,7 +354,7 @@ with st.form("boq_form"):
             adss_12 = st.number_input(
                 "ADSS 12 Core (meter)",
                 min_value=0.0,
-                value=st.session_state.form_values['adss_12'],
+                value=st.session_state.form_values.get('adss_12', 0.0),
                 key='adss_12_input',
                 step=1.0,
                 format="%.1f"
@@ -393,14 +375,14 @@ with st.form("boq_form"):
             )
             pos_odp_raw = st.text_input(
                 "Posisi Tiang ODP (misal: 5,9,14)", 
-                value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
+                value=",".join(map(str, st.session_state.form_values.get('posisi_odp', []))),
                 key='pos_odp_input'
             )
         with col2:
             adss_24 = st.number_input(
                 "ADSS 24 Core (meter)",
                 min_value=0.0,
-                value=st.session_state.form_values['adss_24'],
+                value=st.session_state.form_values.get('adss_24', 0.0),
                 key='adss_24_input',
                 step=1.0,
                 format="%.1f"
@@ -421,7 +403,7 @@ with st.form("boq_form"):
             )
             pos_belokan_raw = st.text_input(
                 "Posisi Tikungan (misal: 7,13)", 
-                value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
+                value=",".join(map(str, st.session_state.form_values.get('posisi_belokan', []))),
                 key='pos_belokan_input'
             )
         
@@ -464,7 +446,7 @@ with st.form("boq_form"):
         help="File template Excel format BOQ"
     )
 
-    # SUBMIT BUTTON
+    # SUBMIT BUTTON - This was already correct in original code
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
 # ======================
@@ -515,8 +497,9 @@ if submitted:
     }
 
     # Process the BOQ template
-    input_data = st.session_state.form_values.copy()
-    result = process_boq_template(uploaded_file, input_data, lop_name)
+    with st.spinner("Sedang memproses BOQ..."):
+        input_data = st.session_state.form_values.copy()
+        result = process_boq_template(uploaded_file, input_data, lop_name)
     
     if result:
         st.session_state.boq_state = {
@@ -566,7 +549,7 @@ if st.session_state.boq_state.get('ready', False):
 
     # Reset button
     if st.button("🔄 Buat BOQ Baru", on_click=reset_application, use_container_width=True):
-        st.rerun()
+        pass  # reset_application() will be called via on_click
 else:
     st.info("ℹ️ Silakan isi form dan unggah template BOQ untuk memulai.")
 

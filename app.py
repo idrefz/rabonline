@@ -265,19 +265,26 @@ def process_boq_template(uploaded_file, inputs, lop_name):
 # 🗅️ FORM UI
 # ======================
 with st.form("boq_form"):
-    st.subheader("Kabel ADSS (opsional jika bukan kabel stock)")
-adss_12 = st.number_input("ADSS 12 Core (meter)", min_value=0.0, value=0.0, step=1.0)
-adss_24 = st.number_input("ADSS 24 Core (meter)", min_value=0.0, value=0.0, step=1.0)
+    # === ADSS SECTION ===
+    st.subheader("📡 Kabel ADSS (opsional, jika bukan kabel stock)")
+    col_adss1, col_adss2 = st.columns(2)
+    with col_adss1:
+        adss_12 = st.number_input("ADSS 12 Core (meter)", min_value=0.0, value=0.0, step=1.0)
+    with col_adss2:
+        adss_24 = st.number_input("ADSS 24 Core (meter)", min_value=0.0, value=0.0, step=1.0)
 
-st.subheader("Posisi ODP dan Tikungan (khusus ADSS)")
-pos_odp_raw = st.text_input("Posisi Tiang ODP (misal: 5,9,14)", value="")
-pos_belokan_raw = st.text_input("Posisi Tikungan (misal: 7,13)", value="")
+    st.subheader("📍 Posisi ODP dan Tikungan (khusus ADSS)")
+    col_pos1, col_pos2 = st.columns(2)
+    with col_pos1:
+        pos_odp_raw = st.text_input("Posisi Tiang ODP (misal: 5,9,14)", value="")
+    with col_pos2:
+        pos_belokan_raw = st.text_input("Posisi Tikungan (misal: 7,13)", value="")
 
-# Parse posisi
-posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
-posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
+    posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
+    posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
 
-    st.subheader("Project Information")
+    # === PROJECT INFO ===
+    st.subheader("📁 Informasi Proyek")
     col1, col2 = st.columns([2, 1])
     with col1:
         lop_name = st.text_input(
@@ -295,7 +302,8 @@ posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip(
             horizontal=True
         )
 
-    st.subheader("Material Requirements")
+    # === MATERIAL REQUIREMENTS ===
+    st.subheader("📦 Kebutuhan Material")
     col1, col2 = st.columns(2)
     with col1:
         kabel_12 = st.number_input(
@@ -352,7 +360,8 @@ posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip(
             help="Masukkan nilai dalam rupiah (contoh: 500000)"
         )
 
-    st.subheader("Template File")
+    # === FILE UPLOAD ===
+    st.subheader("📤 Template File")
     uploaded_file = st.file_uploader(
         "Unggah Template BOQ*",
         type=["xlsx"],
@@ -360,7 +369,9 @@ posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip(
         help="File template Excel format BOQ"
     )
 
+    # === SUBMIT ===
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
+
 
 # ======================
 # 🚀 FORM SUBMISSION

@@ -243,8 +243,9 @@ def process_boq_template(uploaded_file, inputs, lop_name):
     except Exception as e:
         st.error(f"Error processing template: {str(e)}")
         return None
+
 # ======================
-# 🗅️ FORM UI - Diperbaiki
+# 🗅️ FORM UI - Fixed Version
 # ======================
 with st.form("boq_form"):
     # Common sections
@@ -265,29 +266,33 @@ with st.form("boq_form"):
             horizontal=True
         )
     
-    # Jenis Kabel Selection - Diperbaiki
+    # Jenis Kabel Selection - Fixed (no on_change)
     cable_type = st.radio(
         "Jenis Kabel*",
         ["STOCK", "ADSS"],
         index=0 if st.session_state.form_values.get('cable_type', 'STOCK') == "STOCK" else 1,
         key='cable_type_input',
-        horizontal=True,
-        on_change=lambda: st.session_state.form_values.update({'cable_type': st.session_state.cable_type_input})
+        horizontal=True
     )
     
-    # Visual feedback yang lebih jelas
-    if st.session_state.form_values.get('cable_type', 'STOCK') == "ADSS":
+    # Update cable type in session state when form is submitted
+    if submitted:
+        st.session_state.form_values['cable_type'] = cable_type
+
+    # Visual feedback
+    if cable_type == "ADSS":
         st.warning("🔴 MODE ADSS AKTIF - Harap isi posisi ODP")
     else:
         st.success("🔵 MODE STOCK AKTIF")
 
+    # Rest of your form code remains the same...
     # Main form fields
     st.subheader("📦 Kebutuhan Material")
     col1, col2 = st.columns(2)
     
     with col1:
         # Dynamic cable inputs
-        if st.session_state.form_values.get('cable_type', 'STOCK') == "STOCK":
+        if cable_type == "STOCK":
             kabel_12 = st.number_input(
                 "12 Core Cable (meter)*",
                 min_value=0.0,
@@ -351,7 +356,7 @@ with st.form("boq_form"):
     )
     
     # Position inputs - hanya muncul saat ADSS
-    if st.session_state.form_values.get('cable_type', 'STOCK') == "ADSS":
+    if cable_type == "ADSS":
         col_pos1, col_pos2 = st.columns(2)
         with col_pos1:
             pos_odp_raw = st.text_input(

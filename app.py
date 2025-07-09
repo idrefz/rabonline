@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import openpyxl
-import math
 
 # ======================
 # 🎩 CONFIGURATION
@@ -19,14 +18,8 @@ st.markdown("""
         .stRadio > div {
             flex-direction: row;
         }
-        .metric {
-            text-align: center;
-        }
-        .metric .st-emotion-cache-1xarl3l {
-            font-size: 1.2rem !important;
-        }
-        .disabled-input {
-            opacity: 0.7;
+        .disabled-label {
+            color: #6c757d;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -37,7 +30,6 @@ st.title("📊 BOQ Generator (Custom Rules)")
 # 🔄 STATE MANAGEMENT
 # ======================
 def initialize_session_state():
-    """Initialize all session state variables"""
     if 'form_values' not in st.session_state:
         st.session_state.form_values = {
             'lop_name': "",
@@ -48,6 +40,7 @@ def initialize_session_state():
             'adss_24': 0.0,
             'odp_8': 0,
             'odp_16': 0,
+            'total_tiang': 0,
             'tiang_new': 0,
             'tiang_existing': 0,
             'tikungan': 0,
@@ -67,7 +60,6 @@ def initialize_session_state():
         }
 
 def reset_application():
-    """Reset the entire application state"""
     st.session_state.form_values = {
         'lop_name': "",
         'sumber': "ODC",
@@ -77,6 +69,7 @@ def reset_application():
         'adss_24': 0.0,
         'odp_8': 0,
         'odp_16': 0,
+        'total_tiang': 0,
         'tiang_new': 0,
         'tiang_existing': 0,
         'tikungan': 0,
@@ -93,47 +86,34 @@ def reset_application():
         'summary': {}
     }
 
-# Initialize the application
 initialize_session_state()
 
 # ======================
 # 🔧 CORE FUNCTIONS
 # ======================
-def hitung_puas_hl(n_tiang, source='ODC', posisi_odp=[]):
-    puas_hl = 0
-    counter = 0
-    for i in range(n_tiang):
-        idx = i + 1
-        if idx == 1:
-            puas_hl += 2 if source == 'ODC' else 1
-            counter = 1
-        elif idx in posisi_odp:
-            puas_hl += 1
-            counter = 1
-        elif counter == 5:
-            puas_hl += 2
-            counter = 1
-        else:
-            counter += 1
-    return puas_hl
+def hitung_puas_hl(n_tiang, source='ODC'):
+    """Perhitungan khusus PU-AS-HL untuk ADSS"""
+    return 16 if source == 'ODC' else 15
 
-def hitung_puas_sc(posisi_odp, posisi_belokan):
-    return sum([2 if i in posisi_belokan else 3 for i in posisi_odp])
+def hitung_puas_sc():
+    """Perhitungan khusus PU-AS-SC untuk ADSS"""
+    return 3
 
 def calculate_volumes(inputs):
-    """Calculate all required volumes based on input parameters"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
-    total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
     
-    # Determine cable type
-    is_stock = inputs['kabel_12'] > 0 or inputs['kabel_24'] > 0
+    # Tentukan jenis kabel dan total tiang
     is_adss = inputs['adss_12'] > 0 or inputs['adss_24'] > 0
+    is_stock = inputs['kabel_12'] > 0 or inputs['kabel_24'] > 0
     
-    # Validate cable selection
-    if is_stock and is_adss:
-        raise ValueError("Pilih hanya salah satu jenis kabel: STOCK atau ADSS.")
-    if not is_stock and not is_adss:
-        raise ValueError("Pilih minimal satu jenis kabel (STOCK atau ADSS).")
+    if is_adss:
+        total_tiang = inputs['total_tiang']
+        tiang_new = 0
+        tiang_existing = 0
+    else:
+        total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
+        tiang_new = inputs['tiang_new']
+        tiang_existing = inputs['tiang_existing']
 
     # Volume kabel
     vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
@@ -143,36 +123,13 @@ def calculate_volumes(inputs):
 
     # PU-AS atau PU-AS-HL/SC
     if is_adss:
-        vol_puas_hl = hitung_puas_hl(total_tiang, inputs['sumber'], inputs['posisi_odp'])
-        vol_puas_sc = hitung_puas_sc(inputs['posisi_odp'], inputs['posisi_belokan'])
+        vol_puas_hl = hitung_puas_hl(total_tiang, inputs['sumber'])
+        vol_puas_sc = hitung_puas_sc()
         vol_puas = 0
     else:
         vol_puas = max(0, (total_odp * 2) - 1 + total_tiang + inputs['tikungan'])
         vol_puas_hl = 0
         vol_puas_sc = 0
-
-    # OS-SM-1
-    vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
-    vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
-    vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
-
-    # Base Tray
-    vol_base_tray_odc = 0
-    if inputs['sumber'] == "ODC":
-        if inputs['kabel_12'] > 0:
-            vol_base_tray_odc = 1
-        elif inputs['kabel_24'] > 0:
-            vol_base_tray_odc = 2
-
-    # Connectors
-    vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
-    vol_pc_apc = 18 if vol_pc_upc == 1 else vol_pc_upc * 2 if vol_pc_upc > 1 else 0
-    vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0
-
-    # Komponen lain
-    vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
-    vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
-    vol_bc_tr = 3 if inputs['sumber'] == "ODC" else 0
 
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
@@ -200,75 +157,8 @@ def calculate_volumes(inputs):
          "izin_value": float(inputs['izin']) if inputs['izin'] else 0}
     ]
 
-def process_boq_template(uploaded_file, inputs, lop_name):
-    """Process the BOQ template file and calculate all metrics"""
-    try:
-        wb = openpyxl.load_workbook(uploaded_file)
-        ws = wb.active
-        items = calculate_volumes(inputs)
-
-        updated_count = 0
-        for row in range(9, 289):
-            designator = str(ws[f'B{row}'].value or "").strip()
-
-            # Handle preliminary project entry
-            if inputs['izin'] and designator == "" and "Preliminary Project HRB/Kawasan Khusus" not in [str(ws[f'B{r}'].value) for r in range(9, 289)]:
-                ws[f'B{row}'] = "Preliminary Project HRB/Kawasan Khusus"
-                ws[f'F{row}'] = float(inputs['izin'])
-                ws[f'G{row}'] = 1
-                updated_count += 1
-                continue
-
-            # Update existing items
-            for item in items:
-                if item["volume"] > 0 and designator == item["designator"]:
-                    ws[f'G{row}'] = item["volume"]
-                    if designator == "Preliminary Project HRB/Kawasan Khusus":
-                        ws[f'F{row}'] = item.get("izin_value", 0)
-                    updated_count += 1
-                    break
-
-        # Calculate material, jasa, and total costs
-        material = jasa = 0.0
-        for row in range(9, 289):
-            try:
-                h_mat = float(ws[f'E{row}'].value or 0)
-                h_jasa = float(ws[f'F{row}'].value or 0)
-                vol = float(ws[f'G{row}'].value or 0)
-                material += h_mat * vol
-                jasa += h_jasa * vol
-            except:
-                continue
-
-        total = material + jasa
-        total_odp = inputs['odp_8'] + inputs['odp_16']
-        cpp = round((total / (total_odp * 8)), 2) if (total_odp * 8) > 0 else 0
-
-        # Prepare output file
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-
-        return {
-            'excel_data': output,
-            'updated_count': updated_count,
-            'summary': {
-                'material': material,
-                'jasa': jasa,
-                'total': total,
-                'cpp': cpp,
-                'total_odp': total_odp,
-                'total_ports': total_odp * 8
-            },
-            'updated_items': [item for item in items if item['volume'] > 0]
-        }
-
-    except Exception as e:
-        st.error(f"Error processing template: {str(e)}")
-        return None
-
 # ======================
-# 🗅️ FORM UI
+# 🖥️ FORM UI
 # ======================
 with st.form("boq_form"):
     st.subheader("📁 Informasi Proyek")
@@ -277,7 +167,7 @@ with st.form("boq_form"):
         lop_name = st.text_input(
             "Nama LOP*",
             value=st.session_state.form_values['lop_name'],
-            help="Masukkan nama LOP (contoh: LOP_JAKARTA_123)"
+            help="Contoh: LOP_JAKARTA_123"
         )
     with col2:
         sumber = st.radio(
@@ -291,24 +181,24 @@ with st.form("boq_form"):
     col1, col2 = st.columns(2)
     with col1:
         kabel_12 = st.number_input(
-            "12 Core Cable STOCK (meter)",
+            "12 Core STOCK (meter)",
             min_value=0.0,
             value=st.session_state.form_values['kabel_12'],
             step=1.0,
             format="%.1f"
         )
-        kabel_24 = st.number_input(
-            "24 Core Cable STOCK (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values['kabel_24'],
-            step=1.0,
-            format="%.1f"
-        )
-    with col2:
         adss_12 = st.number_input(
             "ADSS 12 Core (meter)",
             min_value=0.0,
             value=st.session_state.form_values['adss_12'],
+            step=1.0,
+            format="%.1f"
+        )
+    with col2:
+        kabel_24 = st.number_input(
+            "24 Core STOCK (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['kabel_24'],
             step=1.0,
             format="%.1f"
         )
@@ -320,7 +210,7 @@ with st.form("boq_form"):
             format="%.1f"
         )
 
-    st.subheader("📊 Kebutuhan ODP & Tiang")
+    st.subheader("📊 ODP & Tiang")
     col1, col2 = st.columns(2)
     with col1:
         odp_8 = st.number_input(
@@ -328,93 +218,111 @@ with st.form("boq_form"):
             min_value=0,
             value=st.session_state.form_values['odp_8']
         )
-        tiang_new = st.number_input(
-            "Tiang Baru*",
-            min_value=0,
-            value=st.session_state.form_values['tiang_new']
-        )
     with col2:
         odp_16 = st.number_input(
             "ODP 16 Port*",
             min_value=0,
             value=st.session_state.form_values['odp_16']
         )
-        tiang_existing = st.number_input(
-            "Tiang Eksisting*",
-            min_value=0,
-            value=st.session_state.form_values['tiang_existing']
-        )
 
-    st.subheader("📍 Posisi ODP & Tikungan (Khusus ADSS)")
+    st.subheader("📍 Konfigurasi Tiang")
     col1, col2 = st.columns(2)
     with col1:
-        pos_odp_raw = st.text_input(
-            "Posisi Tiang ODP (misal: 5,9,14)", 
-            value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
-            help="Diisi hanya jika menggunakan kabel ADSS"
+        total_tiang = st.number_input(
+            "Total Tiang (ADSS)*",
+            min_value=0,
+            value=st.session_state.form_values['total_tiang'],
+            help="Digunakan untuk perhitungan ADSS"
         )
+        
+        pos_odp_raw = st.text_input(
+            "Posisi ODP (contoh: 5,9,14)", 
+            value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
+            help="Wajib diisi untuk ADSS"
+        )
+    
     with col2:
+        st.markdown('<p class="disabled-label">Untuk Kabel STOCK:</p>', unsafe_allow_html=True)
+        tiang_new = st.number_input(
+            "Tiang Baru",
+            min_value=0,
+            value=st.session_state.form_values['tiang_new'],
+            help="Digunakan untuk kabel STOCK"
+        )
+        tiang_existing = st.number_input(
+            "Tiang Eksisting",
+            min_value=0,
+            value=st.session_state.form_values['tiang_existing'],
+            help="Digunakan untuk kabel STOCK"
+        )
+        
         pos_belokan_raw = st.text_input(
-            "Posisi Tikungan (misal: 7,13)", 
+            "Posisi Tikungan (contoh: 7,13)", 
             value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
-            help="Diisi hanya jika menggunakan kabel ADSS"
+            help="Wajib diisi untuk ADSS"
         )
 
     st.subheader("⚙️ Konfigurasi Tambahan")
     tikungan = st.number_input(
         "Jumlah Tikungan*",
         min_value=0,
-        value=st.session_state.form_values['tikungan'],
-        help="Total tikungan dalam rute"
+        value=st.session_state.form_values['tikungan']
     )
     izin = st.text_input(
         "Preliminary Project (Rp)",
         value=st.session_state.form_values['izin'],
-        help="Masukkan nilai dalam rupiah (contoh: 500000)"
+        help="Contoh: 500000"
     )
 
     st.subheader("📤 Template File")
     uploaded_file = st.file_uploader(
         "Unggah Template BOQ*",
         type=["xlsx"],
-        help="File template Excel format BOQ"
+        help="Format file harus .xlsx"
     )
 
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
 # ======================
-# 🚀 FORM SUBMISSION
+# 🚀 FORM PROCESSING
 # ======================
 if submitted:
-    # Validasi izin
-    if izin and not izin.replace(',', '').replace('.', '').isdigit():
-        st.error("Nilai preliminary harus berupa angka!")
+    # Validasi input
+    if not uploaded_file:
+        st.error("Harap unggah file template BOQ!")
+        st.stop()
+    if not lop_name:
+        st.error("Harap isi nama LOP!")
         st.stop()
     
-    # Validasi jenis kabel
-    is_stock = kabel_12 > 0 or kabel_24 > 0
+    # Validasi kabel
     is_adss = adss_12 > 0 or adss_24 > 0
+    is_stock = kabel_12 > 0 or kabel_24 > 0
     
-    if is_stock and is_adss:
-        st.error("Pilih hanya satu jenis kabel (STOCK ATAU ADSS)")
+    if is_adss and is_stock:
+        st.error("Pilih hanya satu jenis kabel (STOCK atau ADSS)!")
         st.stop()
-    if not is_stock and not is_adss:
-        st.error("Harap pilih minimal satu jenis kabel")
+    if not is_adss and not is_stock:
+        st.error("Harap pilih minimal satu jenis kabel!")
         st.stop()
-
-    # Proses posisi ODP dan tikungan
-    posisi_odp = []
-    posisi_belokan = []
-    try:
-        posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
-        posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
-        
-        if any(p <= 0 for p in posisi_odp) or any(p <= 0 for p in posisi_belokan):
-            st.error("Posisi harus berupa angka positif")
+    
+    # Validasi khusus ADSS
+    if is_adss:
+        if total_tiang == 0:
+            st.error("Untuk ADSS, total tiang harus diisi!")
             st.stop()
-    except Exception as e:
-        st.error(f"Format posisi tidak valid: {str(e)}")
-        st.stop()
+        try:
+            posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
+            posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
+        except:
+            st.error("Format posisi tidak valid! Gunakan format contoh: 5,9,14")
+            st.stop()
+    else:
+        posisi_odp = []
+        posisi_belokan = []
+        if (tiang_new + tiang_existing) == 0:
+            st.error("Untuk STOCK, harap isi tiang baru atau eksisting!")
+            st.stop()
 
     # Update session state
     st.session_state.form_values = {
@@ -426,6 +334,7 @@ if submitted:
         'adss_24': adss_24,
         'odp_8': odp_8,
         'odp_16': odp_16,
+        'total_tiang': total_tiang,
         'tiang_new': tiang_new,
         'tiang_existing': tiang_existing,
         'tikungan': tikungan,
@@ -435,9 +344,8 @@ if submitted:
         'uploaded_file': uploaded_file
     }
 
-    # Process the BOQ template
-    input_data = st.session_state.form_values.copy()
-    result = process_boq_template(uploaded_file, input_data, lop_name)
+    # Proses BOQ
+    result = process_boq_template(uploaded_file, st.session_state.form_values, lop_name)
     
     if result:
         st.session_state.boq_state = {
@@ -455,8 +363,6 @@ if submitted:
 if st.session_state.boq_state.get('ready', False):
     st.divider()
     st.subheader("📥 Download BOQ File")
-    
-    # Download button
     st.download_button(
         label="⬇️ Download BOQ",
         data=st.session_state.boq_state['excel_data'],

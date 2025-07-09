@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
-import openpyxl
 import math
+import openpyxl
+from io import BytesIO
+import xml.etree.ElementTree as ET
+from geopy.distance import geodesic
 
 # ======================
 # 🎩 CONFIGURATION
@@ -31,8 +33,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 BOQ Generator (Custom Rules)")
-
 # ======================
 # 🔄 STATE MANAGEMENT
 # ======================
@@ -55,8 +55,9 @@ def initialize_session_state():
             'izin': "",
             'posisi_odp': [],
             'posisi_belokan': [],
-            'jumlah_closure':0,
-            'uploaded_file': None
+            'jumlah_closure': 0,
+            'uploaded_file': None,
+            'kml_file': None
         }
     
     if 'boq_state' not in st.session_state:
@@ -86,8 +87,9 @@ def reset_application():
         'izin': "",
         'posisi_odp': [],
         'posisi_belokan': [],
-        'jumlah_closure':0,
-        'uploaded_file': None
+        'jumlah_closure': 0,
+        'uploaded_file': None,
+        'kml_file': None
     }
     st.session_state.boq_state = {
         'ready': False,
@@ -97,6 +99,7 @@ def reset_application():
         'summary': {}
     }
 
+# Initialize the application
 initialize_session_state()
 
 # ======================
@@ -110,15 +113,56 @@ def hitung_puas_sc():
     """Perhitungan khusus PU-AS-SC untuk ADSS"""
     return 3
 
+def parse_kml_file(kml_file):
+    """Parse KML file to extract pole and ODP positions"""
+    try:
+        kml_data = kml_file.read().decode('utf-8')
+        root = ET.fromstring(kml_data)
+        
+        tiang_list = []
+        odp_positions = []
+        
+        for elem in root.iter():
+            if 'Placemark' in elem.tag:
+                name = elem.find('name').text if elem.find('name') is not None else ""
+                desc = elem.find('description').text if elem.find('description') is not None else ""
+                
+                # Extract coordinates
+                coords = elem.find('.//coordinates')
+                if coords is not None:
+                    coord_text = coords.text.strip()
+                    # Process coordinates
+                
+                # Identify poles and ODPs
+                if 'TN' in name or 'Tiang Baru' in name:
+                    tiang_list.append({'type': 'new', 'position': name})
+                elif 'TE' in name or 'Tiang Existing' in name:
+                    tiang_list.append({'type': 'existing', 'position': name})
+                elif 'ODP' in name:
+                    odp_positions.append(name)
+        
+        return {
+            'tiang_list': tiang_list,
+            'odp_positions': odp_positions,
+            'total_tiang': len(tiang_list),
+            'tiang_new': len([t for t in tiang_list if t['type'] == 'new']),
+            'tiang_existing': len([t for t in tiang_list if t['type'] == 'existing']),
+            'odp_8': len([o for o in odp_positions if '8' in o]),
+            'odp_16': len([o for o in odp_positions if '16' in o])
+        }
+    except Exception as e:
+        st.error(f"Error parsing KML file: {str(e)}")
+        return None
+
 def calculate_volumes(inputs):
     """Calculate all required volumes based on input parameters"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
+    total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
     
-    # Tiang calculation (same for both ADSS and non-ADSS)
-    tiang_new = inputs['tiang_new']  # Always track new poles
-    tiang_existing = inputs['tiang_existing']
-    total_tiang = tiang_new + tiang_existing
-
+    # Determine cable type
+    is_adss = inputs['adss_12'] > 0 or inputs['adss_24'] > 0
+    is_stock = inputs['kabel_12'] > 0 or inputs['kabel_24'] > 0
+    
     # Volume kabel
     vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
     vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
@@ -126,7 +170,7 @@ def calculate_volumes(inputs):
     vol_adss_24 = round(inputs['adss_24'] * 1.02) if inputs['adss_24'] > 0 else 0
 
     # PU-AS atau PU-AS-HL/SC
-    if inputs['adss_12'] > 0 or inputs['adss_24'] > 0:
+    if is_adss:
         vol_puas_hl = hitung_puas_hl(total_tiang, inputs['sumber'])
         vol_puas_sc = hitung_puas_sc()
         vol_puas = 0
@@ -144,7 +188,6 @@ def calculate_volumes(inputs):
     # OS-SM-1
     vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
     vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
-    vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
 
     # Base Tray
     vol_base_tray_odc = 0
@@ -158,11 +201,6 @@ def calculate_volumes(inputs):
     vol_pc_upc = max(1, math.ceil(total_odp / 4)) if total_odp > 0 else 0
     vol_pc_apc = 18 if vol_pc_upc == 1 else vol_pc_upc * 2 if vol_pc_upc > 1 else 0
 
-    # Komponen lain
-    vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
-    vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
-    vol_bc_tr = 3 if inputs['sumber'] == "ODC" else 0
-
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
@@ -170,19 +208,18 @@ def calculate_volumes(inputs):
         {"designator": "AC-OF-SM-ADSS-24D", "volume": vol_adss_24},
         {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
-        {"designator": "PU-S7.0-400NM", "volume": tiang_new},  # Always included
+        {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
         {"designator": "PU-AS", "volume": vol_puas},
         {"designator": "PU-AS-HL", "volume": vol_puas_hl},
         {"designator": "PU-AS-SC", "volume": vol_puas_sc},
         {"designator": "PS-1-4-ODC", "volume": vol_ps_1_4_odc},
         {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
         {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
-        {"designator": "OS-SM-1", "volume": vol_os_sm_1},
         {"designator": "PC-UPC-652-2", "volume": vol_pc_upc},
         {"designator": "PC-APC/UPC-652-A1", "volume": vol_pc_apc},
-        {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
-        {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
-        {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
+        {"designator": "TC-02-ODC", "volume": 1 if inputs['sumber'] == "ODC" else 0},
+        {"designator": "DD-HDPE-40-1", "volume": 6 if inputs['sumber'] == "ODC" else 0},
+        {"designator": "BC-TR-0.6", "volume": 3 if inputs['sumber'] == "ODC" else 0},
         {"designator": "Base Tray ODC", "volume": vol_base_tray_odc},
         {"designator": "SC-OF-SM-24", "volume": vol_closure},
         {"designator": "Preliminary Project HRB/Kawasan Khusus", 
@@ -217,8 +254,7 @@ def process_boq_template(uploaded_file, inputs, lop_name):
                         ws[f'F{row}'] = item.get("izin_value", 0)
                     updated_count += 1
                     break
-          # Closure - ambil dari inputs bukan variabel langsung
-        vol_closure = inputs['jumlah_closure']
+
         # Calculate material, jasa, and total costs
         material = jasa = 0.0
         for row in range(9, 289):
@@ -261,257 +297,315 @@ def process_boq_template(uploaded_file, inputs, lop_name):
 # ======================
 # 🖥️ FORM UI
 # ======================
-with st.form("boq_form"):
-    st.subheader("📁 Informasi Proyek")
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        lop_name = st.text_input(
-            "Nama LOP*",
-            value=st.session_state.form_values['lop_name'],
-            help="Contoh: LOP_JAKARTA_123"
+def show_manual_input_form():
+    with st.form("boq_form"):
+        st.subheader("📁 Informasi Proyek")
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            lop_name = st.text_input(
+                "Nama LOP*",
+                value=st.session_state.form_values['lop_name'],
+                help="Contoh: LOP_JAKARTA_123"
+            )
+        with col2:
+            sumber = st.radio(
+                "Sumber*",
+                ["ODC", "ODP"],
+                index=0 if st.session_state.form_values['sumber'] == "ODC" else 1,
+                horizontal=True
+            )
+
+        st.subheader("📦 Kebutuhan Kabel")
+        col1, col2 = st.columns(2)
+        with col1:
+            kabel_12 = st.number_input(
+                "12 Core STOCK (meter)",
+                min_value=0.0,
+                value=st.session_state.form_values['kabel_12'],
+                step=1.0,
+                format="%.1f"
+            )
+            adss_12 = st.number_input(
+                "ADSS 12 Core (meter)",
+                min_value=0.0,
+                value=st.session_state.form_values['adss_12'],
+                step=1.0,
+                format="%.1f"
+            )
+        with col2:
+            kabel_24 = st.number_input(
+                "24 Core STOCK (meter)",
+                min_value=0.0,
+                value=st.session_state.form_values['kabel_24'],
+                step=1.0,
+                format="%.1f"
+            )
+            adss_24 = st.number_input(
+                "ADSS 24 Core (meter)",
+                min_value=0.0,
+                value=st.session_state.form_values['adss_24'],
+                step=1.0,
+                format="%.1f"
+            )
+
+        st.subheader("📊 ODP & Tiang")
+        col1, col2 = st.columns(2)
+        with col1:
+            odp_8 = st.number_input(
+                "ODP 8 Port*",
+                min_value=0,
+                value=st.session_state.form_values['odp_8']
+            )
+        with col2:
+            odp_16 = st.number_input(
+                "ODP 16 Port*",
+                min_value=0,
+                value=st.session_state.form_values['odp_16']
+            )
+
+        st.subheader("📍 Konfigurasi Tiang")
+        col1, col2 = st.columns(2)
+        with col1:
+            total_tiang = st.number_input(
+                "Total Tiang (ADSS)*",
+                min_value=0,
+                value=st.session_state.form_values['total_tiang'],
+                help="Digunakan untuk perhitungan ADSS"
+            )
+            
+            pos_odp_raw = st.text_input(
+                "Posisi ODP (contoh: 5,9,14)", 
+                value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
+                help="Wajib diisi untuk ADSS"
+            )
+        
+        with col2:
+            st.markdown('<p class="disabled-label">Untuk Kabel STOCK:</p>', unsafe_allow_html=True)
+            tiang_new = st.number_input(
+                "Tiang Baru",
+                min_value=0,
+                value=st.session_state.form_values['tiang_new'],
+                help="Digunakan untuk kabel STOCK"
+            )
+            tiang_existing = st.number_input(
+                "Tiang Eksisting",
+                min_value=0,
+                value=st.session_state.form_values['tiang_existing'],
+                help="Digunakan untuk kabel STOCK"
+            )
+            
+            pos_belokan_raw = st.text_input(
+                "Posisi Tikungan (contoh: 7,13)", 
+                value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
+                help="Wajib diisi untuk ADSS"
+            )
+
+        st.subheader("⚙️ Konfigurasi Tambahan")
+        tikungan = st.number_input(
+            "Jumlah Tikungan*",
+            min_value=0,
+            value=st.session_state.form_values['tikungan']
         )
-    with col2:
+        jumlah_closure = st.number_input(
+            "Jumlah Closure",
+            min_value=0,
+            value=st.session_state.form_values['jumlah_closure']
+        )
+        izin = st.text_input(
+            "Preliminary Project (Rp)",
+            value=st.session_state.form_values['izin'],
+            help="Contoh: 500000"
+        )
+
+        st.subheader("📤 Template File")
+        uploaded_file = st.file_uploader(
+            "Unggah Template BOQ*",
+            type=["xlsx"],
+            help="Format file harus .xlsx"
+        )
+
+        submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
+
+        if submitted:
+            # Process form submission
+            posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
+            posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
+            
+            # Update session state
+            st.session_state.form_values = {
+                'lop_name': lop_name,
+                'sumber': sumber,
+                'kabel_12': kabel_12,
+                'kabel_24': kabel_24,
+                'adss_12': adss_12,
+                'adss_24': adss_24,
+                'odp_8': odp_8,
+                'odp_16': odp_16,
+                'total_tiang': total_tiang,
+                'tiang_new': tiang_new,
+                'tiang_existing': tiang_existing,
+                'tikungan': tikungan,
+                'izin': izin,
+                'posisi_odp': posisi_odp,
+                'posisi_belokan': posisi_belokan,
+                'jumlah_closure': jumlah_closure,
+                'uploaded_file': uploaded_file
+            }
+
+            # Validate and process
+            if not uploaded_file:
+                st.error("Harap unggah file template BOQ!")
+                return
+            
+            result = process_boq_template(uploaded_file, st.session_state.form_values, lop_name)
+            
+            if result:
+                st.session_state.boq_state = {
+                    'ready': True,
+                    'excel_data': result['excel_data'],
+                    'project_name': lop_name,
+                    'updated_items': result['updated_items'],
+                    'summary': result['summary']
+                }
+                st.success(f"✅ BOQ berhasil digenerate! {result['updated_count']} item diupdate.")
+
+def show_kml_input_form():
+    with st.form("kml_form"):
+        st.subheader("📁 Upload File KML")
+        kml_file = st.file_uploader(
+            "Unggah File KML*",
+            type=["kml"],
+            help="Format file harus .kml"
+        )
+        
+        st.subheader("⚙️ Konfigurasi Tambahan")
         sumber = st.radio(
             "Sumber*",
             ["ODC", "ODP"],
-            index=0 if st.session_state.form_values['sumber'] == "ODC" else 1,
+            index=0,
             horizontal=True
         )
-
-    st.subheader("📦 Kebutuhan Kabel")
-    col1, col2 = st.columns(2)
-    with col1:
-        kabel_12 = st.number_input(
-            "12 Core STOCK (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values['kabel_12'],
-            step=1.0,
-            format="%.1f"
-        )
-        adss_12 = st.number_input(
-            "ADSS 12 Core (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values['adss_12'],
-            step=1.0,
-            format="%.1f"
-        )
-    with col2:
-        kabel_24 = st.number_input(
-            "24 Core STOCK (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values['kabel_24'],
-            step=1.0,
-            format="%.1f"
-        )
-        adss_24 = st.number_input(
-            "ADSS 24 Core (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values['adss_24'],
-            step=1.0,
-            format="%.1f"
-        )
-
-    st.subheader("📊 ODP & Tiang")
-    col1, col2 = st.columns(2)
-    with col1:
-        odp_8 = st.number_input(
-            "ODP 8 Port*",
-            min_value=0,
-            value=st.session_state.form_values['odp_8']
-        )
-    with col2:
-        odp_16 = st.number_input(
-            "ODP 16 Port*",
-            min_value=0,
-            value=st.session_state.form_values['odp_16']
-        )
-
-    st.subheader("📍 Konfigurasi Tiang")
-    col1, col2 = st.columns(2)
-    with col1:
-        total_tiang = st.number_input(
-            "Total Tiang (ADSS)*",
-            min_value=0,
-            value=st.session_state.form_values['total_tiang'],
-            help="Digunakan untuk perhitungan ADSS"
-        )
-        
-        pos_odp_raw = st.text_input(
-            "Posisi ODP (contoh: 5,9,14)", 
-            value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
-            help="Wajib diisi untuk ADSS"
-        )
-    
-    with col2:
-        st.markdown('<p class="disabled-label">Untuk Kabel STOCK:</p>', unsafe_allow_html=True)
-        tiang_new = st.number_input(
-            "Tiang Baru",
-            min_value=0,
-            value=st.session_state.form_values['tiang_new'],
-            help="Digunakan untuk kabel STOCK"
-        )
-        tiang_existing = st.number_input(
-            "Tiang Eksisting",
-            min_value=0,
-            value=st.session_state.form_values['tiang_existing'],
-            help="Digunakan untuk kabel STOCK"
-        )
-        
         pos_belokan_raw = st.text_input(
             "Posisi Tikungan (contoh: 7,13)", 
-            value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
-            help="Wajib diisi untuk ADSS"
+            value="",
+            help="Wajib diisi posisi tikungan"
+        )
+        izin = st.text_input(
+            "Preliminary Project (Rp)",
+            value="",
+            help="Contoh: 500000"
+        )
+        
+        st.subheader("📤 Template File")
+        uploaded_file = st.file_uploader(
+            "Unggah Template BOQ*",
+            type=["xlsx"],
+            help="Format file harus .xlsx"
         )
 
-    st.subheader("⚙️ Konfigurasi Tambahan")
-    tikungan = st.number_input(
-        "Jumlah Tikungan*",
-        min_value=0,
-        value=st.session_state.form_values['tikungan']
-    )
-    jumlah_closure = st.number_input(
-        "Jumlah Closure",
-        min_value=0,
-        value=st.session_state.form_values.get('jumlah_closure', 0),
-        help="Jumlah closure yang digunakan"
-    )
-    izin = st.text_input(
-        "Preliminary Project (Rp)",
-        value=st.session_state.form_values['izin'],
-        help="Contoh: 500000"
-    )
-    st.subheader("📤 Template File")
-    uploaded_file = st.file_uploader(
-        "Unggah Template BOQ*",
-        type=["xlsx"],
-        help="Format file harus .xlsx"
-    )
+        submitted = st.form_submit_button("🚀 Generate BOQ dari KML", use_container_width=True)
 
-    submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
-
-# ======================
-# 🚀 FORM PROCESSING
-# ======================
-if submitted:
-    # Validasi input
-    if not uploaded_file:
-        st.error("Harap unggah file template BOQ!")
-        st.stop()
-    if not lop_name:
-        st.error("Harap isi nama LOP!")
-        st.stop()
-    # Validasi tiang baru
-    if tiang_new < 0:
-        st.error("Jumlah tiang baru tidak boleh negatif!")
-        st.stop()
-    
-    # Validasi closure
-    if jumlah_closure < 0:
-        st.error("Jumlah closure tidak boleh negatif!")
-        st.stop()
-    # Validasi kabel
-    is_adss = adss_12 > 0 or adss_24 > 0
-    is_stock = kabel_12 > 0 or kabel_24 > 0
-    
-    if is_adss and is_stock:
-        st.error("Pilih hanya satu jenis kabel (STOCK atau ADSS)!")
-        st.stop()
-    if not is_adss and not is_stock:
-        st.error("Harap pilih minimal satu jenis kabel!")
-        st.stop()
-    
-    # Validasi khusus ADSS
-    if is_adss:
-        if total_tiang == 0:
-            st.error("Untuk ADSS, total tiang harus diisi!")
-            st.stop()
-        try:
-            posisi_odp = [int(x.strip()) for x in pos_odp_raw.split(',') if x.strip().isdigit()]
+        if submitted:
+            if not kml_file or not uploaded_file:
+                st.error("Harap unggah file KML dan template BOQ!")
+                return
+            
+            # Parse KML file
+            kml_data = parse_kml_file(kml_file)
+            if not kml_data:
+                st.error("Gagal memproses file KML!")
+                return
+            
             posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
-        except:
-            st.error("Format posisi tidak valid! Gunakan format contoh: 5,9,14")
-            st.stop()
+            
+            # Prepare inputs
+            inputs = {
+                'lop_name': "BOQ dari KML",
+                'sumber': sumber,
+                'kabel_12': 0,
+                'kabel_24': 0,
+                'adss_12': 0,
+                'adss_24': 0,
+                'odp_8': kml_data['odp_8'],
+                'odp_16': kml_data['odp_16'],
+                'total_tiang': kml_data['total_tiang'],
+                'tiang_new': kml_data['tiang_new'],
+                'tiang_existing': kml_data['tiang_existing'],
+                'tikungan': len(posisi_belokan),
+                'izin': izin,
+                'posisi_odp': kml_data['odp_positions'],
+                'posisi_belokan': posisi_belokan,
+                'jumlah_closure': 0,
+                'uploaded_file': uploaded_file
+            }
+            
+            # Process BOQ
+            result = process_boq_template(uploaded_file, inputs, inputs['lop_name'])
+            
+            if result:
+                st.session_state.boq_state = {
+                    'ready': True,
+                    'excel_data': result['excel_data'],
+                    'project_name': inputs['lop_name'],
+                    'updated_items': result['updated_items'],
+                    'summary': result['summary']
+                }
+                st.success(f"✅ BOQ berhasil digenerate dari KML! {result['updated_count']} item diupdate.")
+
+# ======================
+# 📊 MAIN APPLICATION
+# ======================
+def main():
+    st.title("📊 BOQ Generator (KML + Manual)")
+    
+    tab1, tab2 = st.tabs(["📝 Manual Input", "🗺️ Input dari KML"])
+    with tab1:
+        show_manual_input_form()
+    with tab2:
+        show_kml_input_form()
+    
+    # Show results if available
+    if st.session_state.boq_state.get('ready', False):
+        st.divider()
+        st.subheader("📥 Download BOQ File")
+        st.download_button(
+            label="⬇️ Download BOQ",
+            data=st.session_state.boq_state['excel_data'],
+            file_name=f"BOQ_{st.session_state.boq_state['project_name']}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+        # Project Summary
+        st.subheader("📊 Project Summary")
+        summary = st.session_state.boq_state['summary']
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total ODP", summary['total_odp'])
+            st.metric("Total Port", summary['total_ports'])
+        with col2:
+            st.metric("Material", f"Rp {summary['material']:,.0f}")
+            st.metric("Jasa", f"Rp {summary['jasa']:,.0f}")
+        with col3:
+            st.metric("Total Biaya", f"Rp {summary['total']:,.0f}")
+            st.metric("CPP (Cost Per Port)", f"Rp {summary['cpp']:,.0f}")
+
+        # Updated Items
+        st.subheader("📋 Item yang Diupdate")
+        df_items = pd.DataFrame(st.session_state.boq_state['updated_items'])
+        st.dataframe(df_items, hide_index=True, use_container_width=True)
+
+        # Reset button
+        if st.button("🔄 Buat BOQ Baru", on_click=reset_application, use_container_width=True):
+            st.rerun()
     else:
-        posisi_odp = []
-        posisi_belokan = []
-        if (tiang_new + tiang_existing) == 0:
-            st.error("Untuk STOCK, harap isi tiang baru atau eksisting!")
-            st.stop()
+        st.info("ℹ️ Silakan isi form dan unggah template BOQ untuk memulai.")
 
-    # Update session state
-    st.session_state.form_values = {
-        'lop_name': lop_name,
-        'sumber': sumber,
-        'kabel_12': kabel_12,
-        'kabel_24': kabel_24,
-        'adss_12': adss_12,
-        'adss_24': adss_24,
-        'odp_8': odp_8,
-        'odp_16': odp_16,
-        'total_tiang': total_tiang,
-        'tiang_new': tiang_new,
-        'tiang_existing': tiang_existing,
-        'tikungan': tikungan,
-        'izin': izin,
-        'posisi_odp': posisi_odp,
-        'posisi_belokan': posisi_belokan,
-        'jumlah_closure': jumlah_closure,
-        'uploaded_file': uploaded_file
-    }
-
-    # Proses BOQ
-    result = process_boq_template(uploaded_file, st.session_state.form_values, lop_name)
-    
-    if result:
-        st.session_state.boq_state = {
-            'ready': True,
-            'excel_data': result['excel_data'],
-            'project_name': lop_name,
-            'updated_items': result['updated_items'],
-            'summary': result['summary']
-        }
-        st.success(f"✅ BOQ berhasil digenerate! {result['updated_count']} item diupdate.")
-
-# ======================
-# 📊 RESULTS DISPLAY
-# ======================
-if st.session_state.boq_state.get('ready', False):
+    # Footer
     st.divider()
-    st.subheader("📥 Download BOQ File")
-    st.download_button(
-        label="⬇️ Download BOQ",
-        data=st.session_state.boq_state['excel_data'],
-        file_name=f"BOQ_{st.session_state.boq_state['project_name']}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
+    st.caption("BOQ Generator v2.0 | © 2024 Telkom Indonesia")
 
-    # Project Summary
-    st.subheader("📊 Project Summary")
-    summary = st.session_state.boq_state['summary']
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total ODP", summary['total_odp'])
-        st.metric("Total Port", summary['total_ports'])
-    with col2:
-        st.metric("Material", f"Rp {summary['material']:,.0f}")
-        st.metric("Jasa", f"Rp {summary['jasa']:,.0f}")
-    with col3:
-        st.metric("Total Biaya", f"Rp {summary['total']:,.0f}")
-        st.metric("CPP (Cost Per Port)", f"Rp {summary['cpp']:,.0f}")
-
-    # Updated Items
-    st.subheader("📋 Item yang Diupdate")
-    df_items = pd.DataFrame(st.session_state.boq_state['updated_items'])
-    st.dataframe(df_items, hide_index=True, use_container_width=True)
-
-    # Reset button
-    if st.button("🔄 Buat BOQ Baru", on_click=reset_application, use_container_width=True):
-        st.rerun()
-else:
-    st.info("ℹ️ Silakan isi form dan unggah template BOQ untuk memulai.")
-
-# Footer
-st.divider()
-st.caption("BOQ Generator v2.0 | © 2024 Telkom Indonesia")
+if __name__ == "__main__":
+    initialize_session_state()
+    main()

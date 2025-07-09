@@ -111,6 +111,7 @@ def hitung_puas_sc():
 def calculate_volumes(inputs):
     """Calculate all required volumes based on input parameters"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
+    total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
     
     # Tentukan jenis kabel dan total tiang
     is_adss = inputs['adss_12'] > 0 or inputs['adss_24'] > 0
@@ -131,6 +132,9 @@ def calculate_volumes(inputs):
     vol_adss_12 = round(inputs['adss_12'] * 1.02) if inputs['adss_12'] > 0 else 0
     vol_adss_24 = round(inputs['adss_24'] * 1.02) if inputs['adss_24'] > 0 else 0
 
+    # Tiang baru (selalu dimasukkan)
+    vol_tiang_baru = inputs['tiang_new']
+
     # PU-AS atau PU-AS-HL/SC
     if is_adss:
         vol_puas_hl = hitung_puas_hl(total_tiang, inputs['sumber'])
@@ -140,6 +144,12 @@ def calculate_volumes(inputs):
         vol_puas = max(0, (total_odp * 2) - 1 + total_tiang + inputs['tikungan'])
         vol_puas_hl = 0
         vol_puas_sc = 0
+
+    # PS-1-4-ODC (1 untuk setiap 4 ODP)
+    vol_ps_1_4_odc = math.ceil(total_odp / 4) if inputs['sumber'] == "ODC" else 0
+
+    # Closure
+    vol_closure = inputs['jumlah_closure']
 
     # OS-SM-1
     vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
@@ -368,12 +378,17 @@ with st.form("boq_form"):
         min_value=0,
         value=st.session_state.form_values['tikungan']
     )
+    jumlah_closure = st.number_input(
+        "Jumlah Closure",
+        min_value=0,
+        value=st.session_state.form_values.get('jumlah_closure', 0),
+        help="Jumlah closure yang digunakan"
+    )
     izin = st.text_input(
         "Preliminary Project (Rp)",
         value=st.session_state.form_values['izin'],
         help="Contoh: 500000"
     )
-
     st.subheader("📤 Template File")
     uploaded_file = st.file_uploader(
         "Unggah Template BOQ*",

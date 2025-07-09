@@ -105,6 +105,107 @@ initialize_session_state()
 # ======================
 # 🔧 CORE FUNCTIONS
 # ======================
+def calculate_line_length(coord_text):
+    """Calculate approximate line length in meters from coordinates"""
+    try:
+        points = []
+        for coord in coord_text.split():
+            lon, lat, _ = map(float, coord.split(','))
+            points.append((lat, lon))
+        
+        total_distance = 0.0
+        for i in range(len(points)-1):
+            total_distance += geodesic(points[i], points[i+1]).meters
+        
+        return total_distance
+    except:
+        return 0.0
+
+def parse_kml_file(kml_file):
+    """Parse KML file to extract pole, ODP, cable, OTB, and closure positions with enhanced rules"""
+    try:
+        kml_data = kml_file.read().decode('utf-8')
+        root = ET.fromstring(kml_data)
+        
+        results = {
+            'tiang_list': [],
+            'odp_positions': [],
+            'cable_info': [],
+            'otb_count': 0,
+            'closure_count': 0,
+            'total_tiang': 0,
+            'tiang_new': 0,
+            'tiang_existing': 0,
+            'odp_8': 0,
+            'odp_16': 0,
+            'adss_12': 0.0,
+            'adss_24': 0.0,
+            'stock_12': 0.0,
+            'stock_24': 0.0
+        }
+
+        for elem in root.iter():
+            if 'Placemark' in elem.tag:
+                name = elem.find('name').text if elem.find('name') is not None else ""
+                desc = elem.find('description').text if elem.find('description') is not None else ""
+                name_lower = name.lower()
+                desc_lower = desc.lower()
+
+                # Extract coordinates
+                coords = elem.find('.//coordinates')
+                coord_text = coords.text.strip() if coords is not None else ""
+
+                # 1. ODP Identification
+                if 'odp' in name_lower:
+                    if 'new' in name_lower or 'baru' in name_lower:
+                        if '8' in name or ('solid-pb-8' in desc_lower):
+                            results['odp_8'] += 1
+                            results['odp_positions'].append(f"ODP-8-{results['odp_8']}")
+                        elif '16' in name or ('solid-pb-16' in desc_lower):
+                            results['odp_16'] += 1
+                            results['odp_positions'].append(f"ODP-16-{results['odp_16']}")
+
+                # 2. Pole Identification
+                elif any(x in name_lower for x in ['tn', 't7', 'tiang new']):
+                    results['tiang_new'] += 1
+                    results['tiang_list'].append({'type': 'new', 'position': name})
+                
+                elif any(x in name_lower for x in ['te', 'tiang exist']):
+                    results['tiang_existing'] += 1
+                    results['tiang_list'].append({'type': 'existing', 'position': name})
+
+                # 3. Cable Identification (LineString)
+                elif 'linestring' in str(elem.find('.//LineString')).lower():
+                    if any(x in name_lower or x in desc_lower for x in ['dis new', 'distribusi', 'br']):
+                        # New cable rules
+                        if 'adss-12d' in desc_lower:
+                            results['adss_12'] += calculate_line_length(coord_text)
+                        elif 'adss-24d' in desc_lower:
+                            results['adss_24'] += calculate_line_length(coord_text)
+                        elif '12-sc_o_stock' in desc_lower:
+                            results['stock_12'] += calculate_line_length(coord_text)
+                        elif '24-sc_o_stock' in desc_lower:
+                            results['stock_24'] += calculate_line_length(coord_text)
+                    
+                    elif any(x in name_lower or x in desc_lower for x in ['ds', 'dis existing']):
+                        # Existing cable (track but don't calculate)
+                        pass
+
+                # 4. OTB Identification
+                elif 'otb' in name_lower and ('new' in name_lower or 'baru' in name_lower):
+                    results['otb_count'] += 1
+
+                # 5. Closure Identification
+                elif any(x in name_lower for x in ['cl', 'closure']) and ('new' in name_lower or 'baru' in name_lower):
+                    results['closure_count'] += 1
+
+        results['total_tiang'] = results['tiang_new'] + results['tiang_existing']
+        return results
+
+    except Exception as e:
+        st.error(f"Error parsing KML file: {str(e)}")
+        return None
+
 def hitung_puas_hl(n_tiang, source='ODC'):
     """Perhitungan khusus PU-AS-HL untuk ADSS"""
     return 16 if source == 'ODC' else 15
@@ -112,47 +213,6 @@ def hitung_puas_hl(n_tiang, source='ODC'):
 def hitung_puas_sc():
     """Perhitungan khusus PU-AS-SC untuk ADSS"""
     return 3
-
-def parse_kml_file(kml_file):
-    """Parse KML file to extract pole and ODP positions"""
-    try:
-        kml_data = kml_file.read().decode('utf-8')
-        root = ET.fromstring(kml_data)
-        
-        tiang_list = []
-        odp_positions = []
-        
-        for elem in root.iter():
-            if 'Placemark' in elem.tag:
-                name = elem.find('name').text if elem.find('name') is not None else ""
-                desc = elem.find('description').text if elem.find('description') is not None else ""
-                
-                # Extract coordinates
-                coords = elem.find('.//coordinates')
-                if coords is not None:
-                    coord_text = coords.text.strip()
-                    # Process coordinates
-                
-                # Identify poles and ODPs
-                if 'TN' in name or 'Tiang Baru' in name:
-                    tiang_list.append({'type': 'new', 'position': name})
-                elif 'TE' in name or 'Tiang Existing' in name:
-                    tiang_list.append({'type': 'existing', 'position': name})
-                elif 'ODP' in name:
-                    odp_positions.append(name)
-        
-        return {
-            'tiang_list': tiang_list,
-            'odp_positions': odp_positions,
-            'total_tiang': len(tiang_list),
-            'tiang_new': len([t for t in tiang_list if t['type'] == 'new']),
-            'tiang_existing': len([t for t in tiang_list if t['type'] == 'existing']),
-            'odp_8': len([o for o in odp_positions if '8' in o]),
-            'odp_16': len([o for o in odp_positions if '16' in o])
-        }
-    except Exception as e:
-        st.error(f"Error parsing KML file: {str(e)}")
-        return None
 
 def calculate_volumes(inputs):
     """Calculate all required volumes based on input parameters"""
@@ -222,6 +282,7 @@ def calculate_volumes(inputs):
         {"designator": "BC-TR-0.6", "volume": 3 if inputs['sumber'] == "ODC" else 0},
         {"designator": "Base Tray ODC", "volume": vol_base_tray_odc},
         {"designator": "SC-OF-SM-24", "volume": vol_closure},
+        {"designator": "TC-SM-12", "volume": inputs.get('otb_count', 0)},
         {"designator": "Preliminary Project HRB/Kawasan Khusus", 
          "volume": 1 if inputs['izin'] else 0, 
          "izin_value": float(inputs['izin']) if inputs['izin'] else 0}
@@ -522,20 +583,21 @@ def show_kml_input_form():
             inputs = {
                 'lop_name': "BOQ dari KML",
                 'sumber': sumber,
-                'kabel_12': 0,
-                'kabel_24': 0,
-                'adss_12': 0,
-                'adss_24': 0,
-                'odp_8': kml_data['odp_8'],
-                'odp_16': kml_data['odp_16'],
-                'total_tiang': kml_data['total_tiang'],
-                'tiang_new': kml_data['tiang_new'],
-                'tiang_existing': kml_data['tiang_existing'],
+                'kabel_12': kml_data.get('stock_12', 0),
+                'kabel_24': kml_data.get('stock_24', 0),
+                'adss_12': kml_data.get('adss_12', 0),
+                'adss_24': kml_data.get('adss_24', 0),
+                'odp_8': kml_data.get('odp_8', 0),
+                'odp_16': kml_data.get('odp_16', 0),
+                'total_tiang': kml_data.get('total_tiang', 0),
+                'tiang_new': kml_data.get('tiang_new', 0),
+                'tiang_existing': kml_data.get('tiang_existing', 0),
                 'tikungan': len(posisi_belokan),
                 'izin': izin,
-                'posisi_odp': kml_data['odp_positions'],
+                'posisi_odp': kml_data.get('odp_positions', []),
                 'posisi_belokan': posisi_belokan,
-                'jumlah_closure': 0,
+                'jumlah_closure': kml_data.get('closure_count', 0),
+                'otb_count': kml_data.get('otb_count', 0),
                 'uploaded_file': uploaded_file
             }
             

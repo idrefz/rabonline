@@ -270,145 +270,116 @@ def process_boq_template(uploaded_file, inputs, lop_name):
 # ======================
 # 🗅️ FORM UI
 # ======================
-# ======================
-# 🗅️ FORM UI - Simplified Version
-# ======================
 with st.form("boq_form"):
     st.subheader("📁 Informasi Proyek")
-    
-    # Basic Information
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2, 1])
     with col1:
         lop_name = st.text_input(
             "Nama LOP*",
-            value=st.session_state.form_values.get('lop_name', ''),
-            help="Masukkan nama LOP proyek"
+            value=st.session_state.form_values['lop_name'],
+            help="Masukkan nama LOP (contoh: LOP_JAKARTA_123)"
         )
     with col2:
         sumber = st.radio(
             "Sumber*",
             ["ODC", "ODP"],
-            index=0 if st.session_state.form_values.get('sumber', 'ODC') == "ODC" else 1,
+            index=0 if st.session_state.form_values['sumber'] == "ODC" else 1,
             horizontal=True
         )
-    
-    # Cable Type Selection
-    cable_type = st.radio(
-        "Jenis Kabel*",
-        ["STOCK", "ADSS"],
-        index=0 if st.session_state.form_values.get('cable_type', 'STOCK') == "STOCK" else 1,
-        horizontal=True
-    )
-    
-    st.subheader("📦 Kebutuhan Material")
-    
-    # Common Fields
+
+    st.subheader("📦 Kebutuhan Kabel")
+    col1, col2 = st.columns(2)
+    with col1:
+        kabel_12 = st.number_input(
+            "12 Core Cable STOCK (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['kabel_12'],
+            step=1.0,
+            format="%.1f"
+        )
+        kabel_24 = st.number_input(
+            "24 Core Cable STOCK (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['kabel_24'],
+            step=1.0,
+            format="%.1f"
+        )
+    with col2:
+        adss_12 = st.number_input(
+            "ADSS 12 Core (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['adss_12'],
+            step=1.0,
+            format="%.1f"
+        )
+        adss_24 = st.number_input(
+            "ADSS 24 Core (meter)",
+            min_value=0.0,
+            value=st.session_state.form_values['adss_24'],
+            step=1.0,
+            format="%.1f"
+        )
+
+    st.subheader("📊 Kebutuhan ODP & Tiang")
     col1, col2 = st.columns(2)
     with col1:
         odp_8 = st.number_input(
             "ODP 8 Port*",
             min_value=0,
-            value=st.session_state.form_values.get('odp_8', 0),
-            step=1
+            value=st.session_state.form_values['odp_8']
         )
         tiang_new = st.number_input(
             "Tiang Baru*",
             min_value=0,
-            value=st.session_state.form_values.get('tiang_new', 0),
-            step=1
+            value=st.session_state.form_values['tiang_new']
         )
     with col2:
         odp_16 = st.number_input(
             "ODP 16 Port*",
             min_value=0,
-            value=st.session_state.form_values.get('odp_16', 0),
-            step=1
+            value=st.session_state.form_values['odp_16']
         )
         tiang_existing = st.number_input(
             "Tiang Eksisting*",
             min_value=0,
-            value=st.session_state.form_values.get('tiang_existing', 0),
-            step=1
+            value=st.session_state.form_values['tiang_existing']
         )
-    
+
+    st.subheader("📍 Posisi ODP & Tikungan (Khusus ADSS)")
+    col1, col2 = st.columns(2)
+    with col1:
+        pos_odp_raw = st.text_input(
+            "Posisi Tiang ODP (misal: 5,9,14)", 
+            value=",".join(map(str, st.session_state.form_values['posisi_odp'])),
+            help="Diisi hanya jika menggunakan kabel ADSS"
+        )
+    with col2:
+        pos_belokan_raw = st.text_input(
+            "Posisi Tikungan (misal: 7,13)", 
+            value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
+            help="Diisi hanya jika menggunakan kabel ADSS"
+        )
+
+    st.subheader("⚙️ Konfigurasi Tambahan")
     tikungan = st.number_input(
         "Jumlah Tikungan*",
         min_value=0,
-        value=st.session_state.form_values.get('tikungan', 0),
-        step=1
+        value=st.session_state.form_values['tikungan'],
+        help="Total tikungan dalam rute"
     )
-    
-    # STOCK Cable Fields
-    st.markdown("---")
-    st.markdown("**Kabel STOCK**")
-    col1, col2 = st.columns(2)
-    with col1:
-        kabel_12 = st.number_input(
-            "Panjang Kabel 12 Core (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values.get('kabel_12', 0.0),
-            step=0.5,
-            disabled=(cable_type == "ADSS")
-        )
-    with col2:
-        kabel_24 = st.number_input(
-            "Panjang Kabel 24 Core (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values.get('kabel_24', 0.0),
-            step=0.5,
-            disabled=(cable_type == "ADSS")
-        )
-    
-    # ADSS Cable Fields
-    st.markdown("---")
-    st.markdown("**Kabel ADSS**")
-    col1, col2 = st.columns(2)
-    with col1:
-        adss_12 = st.number_input(
-            "Panjang ADSS 12 Core (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values.get('adss_12', 0.0),
-            step=0.5,
-            disabled=(cable_type == "STOCK")
-        )
-        
-        # Position inputs for ADSS
-        if cable_type == "ADSS":
-            pos_odp_raw = st.text_input(
-                "Posisi Tiang ODP (contoh: 5,9,14)*",
-                value=",".join(map(str, st.session_state.form_values.get('posisi_odp', [])))
-    with col2:
-        adss_24 = st.number_input(
-            "Panjang ADSS 24 Core (meter)",
-            min_value=0.0,
-            value=st.session_state.form_values.get('adss_24', 0.0),
-            step=0.5,
-            disabled=(cable_type == "STOCK")
-        )
-        
-        # Position inputs for ADSS
-        if cable_type == "ADSS":
-            pos_belokan_raw = st.text_input(
-                "Posisi Tikungan (contoh: 7,13)",
-                value=",".join(map(str, st.session_state.form_values.get('posisi_belokan', [])))
-    
-    # Other Fields
-    st.markdown("---")
     izin = st.text_input(
-        "Biaya Preliminary (jika ada)",
-        value=st.session_state.form_values.get('izin', ''),
-        help="Masukkan nominal jika ada biaya preliminary"
+        "Preliminary Project (Rp)",
+        value=st.session_state.form_values['izin'],
+        help="Masukkan nilai dalam rupiah (contoh: 500000)"
     )
-    
-    # File Upload
+
     st.subheader("📤 Template File")
     uploaded_file = st.file_uploader(
         "Unggah Template BOQ*",
         type=["xlsx"],
-        help="File template BOQ dalam format Excel"
+        help="File template Excel format BOQ"
     )
-    
-    # Submit Button
+
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
 # ======================

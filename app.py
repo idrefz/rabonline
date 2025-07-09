@@ -266,7 +266,7 @@ with st.form("boq_form"):
             horizontal=True
         )
     
-    # Jenis Kabel Selection - Fixed (no on_change)
+    # Jenis Kabel Selection
     cable_type = st.radio(
         "Jenis Kabel*",
         ["STOCK", "ADSS"],
@@ -275,17 +275,12 @@ with st.form("boq_form"):
         horizontal=True
     )
     
-    # Update cable type in session state when form is submitted
-    if submitted:
-        st.session_state.form_values['cable_type'] = cable_type
-
     # Visual feedback
     if cable_type == "ADSS":
         st.warning("🔴 MODE ADSS AKTIF - Harap isi posisi ODP")
     else:
         st.success("🔵 MODE STOCK AKTIF")
 
-    # Rest of your form code remains the same...
     # Main form fields
     st.subheader("📦 Kebutuhan Material")
     col1, col2 = st.columns(2)
@@ -305,6 +300,8 @@ with st.form("boq_form"):
                 value=st.session_state.form_values.get('kabel_24', 0.0),
                 key='kabel_24_input'
             )
+            adss_12 = 0.0
+            adss_24 = 0.0
         else:
             adss_12 = st.number_input(
                 "ADSS 12 Core (meter)*",
@@ -318,6 +315,8 @@ with st.form("boq_form"):
                 value=st.session_state.form_values.get('adss_24', 0.0),
                 key='adss_24_input'
             )
+            kabel_12 = 0.0
+            kabel_24 = 0.0
         
         odp_8 = st.number_input(
             "ODP 8 Port*",
@@ -355,7 +354,7 @@ with st.form("boq_form"):
         key='tikungan_input'
     )
     
-    # Position inputs - hanya muncul saat ADSS
+    # Position inputs - only for ADSS
     if cable_type == "ADSS":
         col_pos1, col_pos2 = st.columns(2)
         with col_pos1:
@@ -370,6 +369,11 @@ with st.form("boq_form"):
                 value=",".join(map(str, st.session_state.form_values.get('posisi_belokan', []))),
                 key='pos_belokan_input'
             )
+    else:
+        pos_odp_raw = ""
+        pos_belokan_raw = ""
+        posisi_odp = []
+        posisi_belokan = []
     
     izin = st.text_input(
         "Preliminary (isi nominal jika ada)",
@@ -385,11 +389,15 @@ with st.form("boq_form"):
         key='uploaded_file_input'
     )
 
+    # Proper form submit button
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
+
 
 # ======================
 # 🚀 FORM SUBMISSION
 # ======================
+
+# Move the form submission logic outside the form context
 if submitted:
     # Validate required fields
     if not uploaded_file:
@@ -400,7 +408,7 @@ if submitted:
         st.stop()
     
     # Validate izin is numeric if provided
-    if common_fields['izin'] and not common_fields['izin'].replace(',', '').replace('.', '').isdigit():
+    if izin and not izin.replace(',', '').replace('.', '').isdigit():
         st.error("Nilai preliminary harus berupa angka!")
         st.stop()
     
@@ -427,7 +435,7 @@ if submitted:
                 posisi_belokan = [int(x.strip()) for x in pos_belokan_raw.split(',') if x.strip().isdigit()]
             
             # Validate positions are positive and within range
-            total_tiang = common_fields['tiang_new'] + common_fields['tiang_existing']
+            total_tiang = tiang_new + tiang_existing
             if any(p <= 0 for p in posisi_odp + posisi_belokan):
                 st.error("Posisi harus berupa angka positif")
                 st.stop()
@@ -446,12 +454,12 @@ if submitted:
         'kabel_24': kabel_24,
         'adss_12': adss_12,
         'adss_24': adss_24,
-        'odp_8': common_fields['odp_8'],
-        'odp_16': common_fields['odp_16'],
-        'tiang_new': common_fields['tiang_new'],
-        'tiang_existing': common_fields['tiang_existing'],
-        'tikungan': common_fields['tikungan'],
-        'izin': common_fields['izin'],
+        'odp_8': odp_8,
+        'odp_16': odp_16,
+        'tiang_new': tiang_new,
+        'tiang_existing': tiang_existing,
+        'tikungan': tikungan,
+        'izin': izin,
         'posisi_odp': posisi_odp,
         'posisi_belokan': posisi_belokan,
         'uploaded_file': uploaded_file,

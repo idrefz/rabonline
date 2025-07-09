@@ -55,6 +55,7 @@ def initialize_session_state():
             'izin': "",
             'posisi_odp': [],
             'posisi_belokan': [],
+            'jumlah_closure':0,
             'uploaded_file': None
         }
     
@@ -85,6 +86,7 @@ def reset_application():
         'izin': "",
         'posisi_odp': [],
         'posisi_belokan': [],
+        'jumlah_closure':0,
         'uploaded_file': None
     }
     st.session_state.boq_state = {
@@ -195,6 +197,7 @@ def calculate_volumes(inputs):
         {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
         {"designator": "Base Tray ODC", "volume": vol_base_tray_odc},
+        {"designator": "SC-OF-SM-24", "volume": vol_closure},
         {"designator": "Preliminary Project HRB/Kawasan Khusus", 
          "volume": 1 if inputs['izin'] else 0, 
          "izin_value": float(inputs['izin']) if inputs['izin'] else 0}
@@ -227,7 +230,8 @@ def process_boq_template(uploaded_file, inputs, lop_name):
                         ws[f'F{row}'] = item.get("izin_value", 0)
                     updated_count += 1
                     break
-
+          # Closure - ambil dari inputs bukan variabel langsung
+        vol_closure = inputs['jumlah_closure']
         # Calculate material, jasa, and total costs
         material = jasa = 0.0
         for row in range(9, 289):
@@ -464,6 +468,7 @@ if submitted:
         'izin': izin,
         'posisi_odp': posisi_odp,
         'posisi_belokan': posisi_belokan,
+        'jumlah_closure': jumlah_closure,
         'uploaded_file': uploaded_file
     }
 

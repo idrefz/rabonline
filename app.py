@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import openpyxl
+import math
 
 # ======================
 # 🎩 CONFIGURATION
@@ -18,6 +19,12 @@ st.markdown("""
         .stRadio > div {
             flex-direction: row;
         }
+        .metric {
+            text-align: center;
+        }
+        .metric .st-emotion-cache-1xarl3l {
+            font-size: 1.2rem !important;
+        }
         .disabled-label {
             color: #6c757d;
         }
@@ -30,6 +37,7 @@ st.title("📊 BOQ Generator (Custom Rules)")
 # 🔄 STATE MANAGEMENT
 # ======================
 def initialize_session_state():
+    """Initialize all session state variables"""
     if 'form_values' not in st.session_state:
         st.session_state.form_values = {
             'lop_name': "",
@@ -60,6 +68,7 @@ def initialize_session_state():
         }
 
 def reset_application():
+    """Reset the entire application state"""
     st.session_state.form_values = {
         'lop_name': "",
         'sumber': "ODC",
@@ -100,6 +109,7 @@ def hitung_puas_sc():
     return 3
 
 def calculate_volumes(inputs):
+    """Calculate all required volumes based on input parameters"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
     
     # Tentukan jenis kabel dan total tiang
@@ -131,6 +141,29 @@ def calculate_volumes(inputs):
         vol_puas_hl = 0
         vol_puas_sc = 0
 
+    # OS-SM-1
+    vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
+    vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
+    vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
+
+    # Base Tray
+    vol_base_tray_odc = 0
+    if inputs['sumber'] == "ODC":
+        if inputs['kabel_12'] > 0:
+            vol_base_tray_odc = 1
+        elif inputs['kabel_24'] > 0:
+            vol_base_tray_odc = 2
+
+    # Connectors
+    vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
+    vol_pc_apc = 18 if vol_pc_upc == 1 else vol_pc_upc * 2 if vol_pc_upc > 1 else 0
+    vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0
+
+    # Komponen lain
+    vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
+    vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
+    vol_bc_tr = 3 if inputs['sumber'] == "ODC" else 0
+
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
@@ -138,7 +171,7 @@ def calculate_volumes(inputs):
         {"designator": "AC-OF-SM-ADSS-24D", "volume": vol_adss_24},
         {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
-        {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
+        {"designator": "PU-S7.0-400NM", "volume": tiang_new},
         {"designator": "PU-AS", "volume": vol_puas},
         {"designator": "PU-AS-HL", "volume": vol_puas_hl},
         {"designator": "PU-AS-SC", "volume": vol_puas_sc},
@@ -156,6 +189,73 @@ def calculate_volumes(inputs):
          "volume": 1 if inputs['izin'] else 0, 
          "izin_value": float(inputs['izin']) if inputs['izin'] else 0}
     ]
+
+def process_boq_template(uploaded_file, inputs, lop_name):
+    """Process the BOQ template file and calculate all metrics"""
+    try:
+        wb = openpyxl.load_workbook(uploaded_file)
+        ws = wb.active
+        items = calculate_volumes(inputs)
+
+        updated_count = 0
+        for row in range(9, 289):
+            designator = str(ws[f'B{row}'].value or "").strip()
+
+            # Handle preliminary project entry
+            if inputs['izin'] and designator == "" and "Preliminary Project HRB/Kawasan Khusus" not in [str(ws[f'B{r}'].value) for r in range(9, 289)]:
+                ws[f'B{row}'] = "Preliminary Project HRB/Kawasan Khusus"
+                ws[f'F{row}'] = float(inputs['izin'])
+                ws[f'G{row}'] = 1
+                updated_count += 1
+                continue
+
+            # Update existing items
+            for item in items:
+                if item["volume"] > 0 and designator == item["designator"]:
+                    ws[f'G{row}'] = item["volume"]
+                    if designator == "Preliminary Project HRB/Kawasan Khusus":
+                        ws[f'F{row}'] = item.get("izin_value", 0)
+                    updated_count += 1
+                    break
+
+        # Calculate material, jasa, and total costs
+        material = jasa = 0.0
+        for row in range(9, 289):
+            try:
+                h_mat = float(ws[f'E{row}'].value or 0)
+                h_jasa = float(ws[f'F{row}'].value or 0)
+                vol = float(ws[f'G{row}'].value or 0)
+                material += h_mat * vol
+                jasa += h_jasa * vol
+            except:
+                continue
+
+        total = material + jasa
+        total_odp = inputs['odp_8'] + inputs['odp_16']
+        cpp = round((total / (total_odp * 8)), 2) if (total_odp * 8) > 0 else 0
+
+        # Prepare output file
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        return {
+            'excel_data': output,
+            'updated_count': updated_count,
+            'summary': {
+                'material': material,
+                'jasa': jasa,
+                'total': total,
+                'cpp': cpp,
+                'total_odp': total_odp,
+                'total_ports': total_odp * 8
+            },
+            'updated_items': [item for item in items if item['volume'] > 0]
+        }
+
+    except Exception as e:
+        st.error(f"Error processing template: {str(e)}")
+        return None
 
 # ======================
 # 🖥️ FORM UI
@@ -283,7 +383,6 @@ with st.form("boq_form"):
 
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
-
 # ======================
 # 🚀 FORM PROCESSING
 # ======================
@@ -359,7 +458,7 @@ if submitted:
         st.success(f"✅ BOQ berhasil digenerate! {result['updated_count']} item diupdate.")
 
 # ======================
-# 📂 RESULTS SECTION
+# 📊 RESULTS DISPLAY
 # ======================
 if st.session_state.boq_state.get('ready', False):
     st.divider()
@@ -400,4 +499,4 @@ else:
 
 # Footer
 st.divider()
-st.caption("BOQ Generator v1.0 | © 2024 Telkom Indonesia")
+st.caption("BOQ Generator v2.0 | © 2024 Telkom Indonesia")

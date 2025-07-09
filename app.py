@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import openpyxl
+import math
 
 # ======================
 # 🎩 CONFIGURATION
@@ -87,27 +88,60 @@ initialize_session_state()
 # ======================
 # 🔧 CORE FUNCTIONS
 # ======================
-def calculate_volumes(inputs):
+def hitung_puas_hl(n_tiang, source='ODC', posisi_odp=[]):
+    puas_hl = 0
+    counter = 0
+    for i in range(n_tiang):
+        idx = i + 1
+        if idx == 1:
+            puas_hl += 2 if source == 'ODC' else 1
+            counter = 1
+        elif idx in posisi_odp:
+            puas_hl += 1
+            counter = 1
+        elif counter == 5:
+            puas_hl += 2
+            counter = 1
+        else:
+            counter += 1
+    return puas_hl
+
+def hitung_puas_sc(posisi_odp, posisi_belokan):
+    return sum([2 if i in posisi_belokan else 3 for i in posisi_odp])
+def calculate_volumes(inputs, posisi_odp=[], posisi_belokan=[]):
     """Calculate all required volumes based on input parameters"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
+    total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
 
-    # Validate cable selection
-    if inputs['kabel_12'] > 0 and inputs['kabel_24'] > 0:
-        raise ValueError("Silakan pilih hanya satu jenis kabel (12-core ATAU 24-core)")
+    # Validasi kombinasi kabel
+    kabel_stock = inputs['kabel_12'] > 0 or inputs['kabel_24'] > 0
+    kabel_adss = inputs.get('adss_12', 0) > 0 or inputs.get('adss_24', 0) > 0
+    if kabel_stock and kabel_adss:
+        raise ValueError("Pilih hanya salah satu jenis kabel: STOCK atau ADSS.")
 
-    # Calculate cable volumes with 2% overhead
+    # Volume kabel
     vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
     vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
-    
-    # Calculate PU-AS volume
-    vol_puas = max(0, (total_odp * 2) - 1 + inputs['tiang_new'] + inputs['tiang_existing'] + inputs['tikungan'])
+    vol_adss_12 = round(inputs.get('adss_12', 0) * 1.02) if inputs.get('adss_12', 0) > 0 else 0
+    vol_adss_24 = round(inputs.get('adss_24', 0) * 1.02) if inputs.get('adss_24', 0) > 0 else 0
+    is_adss = vol_adss_12 > 0 or vol_adss_24 > 0
 
-    # Calculate OS-SM-1 volumes based on source (UPDATED as requested)
+    # PU-AS atau PU-AS-HL/SC
+    if is_adss:
+        vol_puas_hl = hitung_puas_hl(total_tiang, inputs['sumber'], posisi_odp)
+        vol_puas_sc = hitung_puas_sc(posisi_odp, posisi_belokan)
+        vol_puas = 0
+    else:
+        vol_puas = max(0, (total_odp * 2) - 1 + total_tiang + inputs['tikungan'])
+        vol_puas_hl = 0
+        vol_puas_sc = 0
+
+    # OS-SM-1
     vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
     vol_os_sm_1_odp = total_odp * 2 if inputs['sumber'] == "ODP" else 0
     vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
 
-    # Calculate Base Tray ODC (unchanged)
+    # Base Tray
     vol_base_tray_odc = 0
     if inputs['sumber'] == "ODC":
         if inputs['kabel_12'] > 0:
@@ -115,12 +149,12 @@ def calculate_volumes(inputs):
         elif inputs['kabel_24'] > 0:
             vol_base_tray_odc = 2
 
-    # Calculate connector volumes
+    # Connectors
     vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
     vol_pc_apc = 18 if vol_pc_upc == 1 else vol_pc_upc * 2 if vol_pc_upc > 1 else 0
     vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0
 
-    # Calculate other components
+    # Komponen lain
     vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
     vol_dd_hdpe = 6 if inputs['sumber'] == "ODC" else 0
     vol_bc_tr = 3 if inputs['sumber'] == "ODC" else 0
@@ -128,10 +162,14 @@ def calculate_volumes(inputs):
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
+        {"designator": "AC-OF-SM-ADSS-12D", "volume": vol_adss_12},
+        {"designator": "AC-OF-SM-ADSS-24D", "volume": vol_adss_24},
         {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
         {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
         {"designator": "PU-AS", "volume": vol_puas},
+        {"designator": "PU-AS-HL", "volume": vol_puas_hl},
+        {"designator": "PU-AS-SC", "volume": vol_puas_sc},
         {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
         {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
         {"designator": "OS-SM-1", "volume": vol_os_sm_1},

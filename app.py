@@ -283,6 +283,7 @@ with st.form("boq_form"):
 
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
+
 # ======================
 # 🚀 FORM PROCESSING
 # ======================

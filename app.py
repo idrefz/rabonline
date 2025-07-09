@@ -244,7 +244,7 @@ def process_boq_template(uploaded_file, inputs, lop_name):
         st.error(f"Error processing template: {str(e)}")
         return None
 # ======================
-# 🗅️ FORM UI
+# 🗅️ FORM UI - Diperbaiki
 # ======================
 with st.form("boq_form"):
     # Common sections
@@ -254,8 +254,7 @@ with st.form("boq_form"):
         lop_name = st.text_input(
             "Nama LOP*",
             value=st.session_state.form_values.get('lop_name', ''),
-            key='lop_name_input',
-            help="Masukkan nama LOP (contoh: LOP_JAKARTA_123)"
+            key='lop_name_input'
         )
     with col2:
         sumber = st.radio(
@@ -266,56 +265,53 @@ with st.form("boq_form"):
             horizontal=True
         )
     
-    # Jenis Kabel Selection
+    # Jenis Kabel Selection - Diperbaiki
     cable_type = st.radio(
         "Jenis Kabel*",
         ["STOCK", "ADSS"],
         index=0 if st.session_state.form_values.get('cable_type', 'STOCK') == "STOCK" else 1,
         key='cable_type_input',
-        horizontal=True
+        horizontal=True,
+        on_change=lambda: st.session_state.form_values.update({'cable_type': st.session_state.cable_type_input})
     )
     
-    st.markdown(f"**Mode aktif:** {'🔵 STOCK' if cable_type == 'STOCK' else '🔴 ADSS'}")
+    # Visual feedback yang lebih jelas
+    if st.session_state.form_values.get('cable_type', 'STOCK') == "ADSS":
+        st.warning("🔴 MODE ADSS AKTIF - Harap isi posisi ODP")
+    else:
+        st.success("🔵 MODE STOCK AKTIF")
 
     # Main form fields
     st.subheader("📦 Kebutuhan Material")
     col1, col2 = st.columns(2)
     
     with col1:
-        # Cable inputs (dynamic based on type)
-        if cable_type == "STOCK":
+        # Dynamic cable inputs
+        if st.session_state.form_values.get('cable_type', 'STOCK') == "STOCK":
             kabel_12 = st.number_input(
                 "12 Core Cable (meter)*",
                 min_value=0.0,
                 value=st.session_state.form_values.get('kabel_12', 0.0),
-                key='kabel_12_input',
-                step=1.0,
-                format="%.1f"
+                key='kabel_12_input'
             )
             kabel_24 = st.number_input(
                 "24 Core Cable (meter)*",
                 min_value=0.0,
                 value=st.session_state.form_values.get('kabel_24', 0.0),
-                key='kabel_24_input',
-                step=1.0,
-                format="%.1f"
+                key='kabel_24_input'
             )
-        else:  # ADSS
+        else:
             adss_12 = st.number_input(
                 "ADSS 12 Core (meter)*",
                 min_value=0.0,
                 value=st.session_state.form_values.get('adss_12', 0.0),
-                key='adss_12_input',
-                step=1.0,
-                format="%.1f"
+                key='adss_12_input'
             )
             adss_24 = st.number_input(
                 "ADSS 24 Core (meter)*",
                 min_value=0.0,
                 value=st.session_state.form_values.get('adss_24', 0.0),
-                key='adss_24_input',
-                step=1.0,
-                format="%.1f"
+                key='adss_24_input'
             )
         
         odp_8 = st.number_input(
@@ -347,7 +343,6 @@ with st.form("boq_form"):
             key='odp_16_input'
         )
     
-    # Additional fields
     tikungan = st.number_input(
         "Tikungan*",
         min_value=0,
@@ -355,8 +350,8 @@ with st.form("boq_form"):
         key='tikungan_input'
     )
     
-    # Position inputs (only shown for ADSS)
-    if cable_type == "ADSS":
+    # Position inputs - hanya muncul saat ADSS
+    if st.session_state.form_values.get('cable_type', 'STOCK') == "ADSS":
         col_pos1, col_pos2 = st.columns(2)
         with col_pos1:
             pos_odp_raw = st.text_input(
@@ -374,8 +369,7 @@ with st.form("boq_form"):
     izin = st.text_input(
         "Preliminary (isi nominal jika ada)",
         value=st.session_state.form_values.get('izin', ''),
-        key='izin_input',
-        help="Masukkan nilai dalam rupiah (contoh: 500000)"
+        key='izin_input'
     )
 
     # FILE UPLOAD
@@ -383,11 +377,9 @@ with st.form("boq_form"):
     uploaded_file = st.file_uploader(
         "Unggah Template BOQ*",
         type=["xlsx"],
-        key='uploaded_file_input',
-        help="File template Excel format BOQ"
+        key='uploaded_file_input'
     )
 
-    # SUBMIT BUTTON
     submitted = st.form_submit_button("🚀 Generate BOQ", use_container_width=True)
 
 # ======================

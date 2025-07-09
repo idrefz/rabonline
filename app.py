@@ -57,7 +57,8 @@ def initialize_session_state():
             'posisi_belokan': [],
             'jumlah_closure': 0,
             'uploaded_file': None,
-            'kml_file': None
+            'kml_file': None,
+            'cable_type': None  # 'ADSS' or 'STOCK'
         }
     
     if 'boq_state' not in st.session_state:
@@ -89,7 +90,8 @@ def reset_application():
         'posisi_belokan': [],
         'jumlah_closure': 0,
         'uploaded_file': None,
-        'kml_file': None
+        'kml_file': None,
+        'cable_type': None
     }
     st.session_state.boq_state = {
         'ready': False,
@@ -122,7 +124,7 @@ def calculate_line_length(coord_text):
         return 0.0
 
 def parse_kml_file(kml_file):
-    """Parse KML file to extract pole, ODP, cable, OTB, and closure positions with enhanced rules"""
+    """Parse KML file to extract components with ADSS/STOCK differentiation"""
     try:
         kml_data = kml_file.read().decode('utf-8')
         root = ET.fromstring(kml_data)
@@ -141,7 +143,8 @@ def parse_kml_file(kml_file):
             'adss_12': 0.0,
             'adss_24': 0.0,
             'stock_12': 0.0,
-            'stock_24': 0.0
+            'stock_24': 0.0,
+            'cable_type': None  # Will be set based on cable content
         }
 
         for elem in root.iter():
@@ -174,22 +177,32 @@ def parse_kml_file(kml_file):
                     results['tiang_existing'] += 1
                     results['tiang_list'].append({'type': 'existing', 'position': name})
 
-                # 3. Cable Identification (LineString)
+                # 3. Cable Identification (LineString) - ADSS vs STOCK
                 elif 'linestring' in str(elem.find('.//LineString')).lower():
-                    if any(x in name_lower or x in desc_lower for x in ['dis new', 'distribusi', 'br']):
-                        # New cable rules
-                        if 'adss-12d' in desc_lower:
+                    # ADSS Cables
+                    if 'adss' in desc_lower or 'adss' in name_lower:
+                        results['cable_type'] = 'ADSS'
+                        if '12' in desc_lower or '12' in name_lower:
                             results['adss_12'] += calculate_line_length(coord_text)
-                        elif 'adss-24d' in desc_lower:
+                        elif '24' in desc_lower or '24' in name_lower:
                             results['adss_24'] += calculate_line_length(coord_text)
-                        elif '12-sc_o_stock' in desc_lower:
+                    
+                    # STOCK Cables
+                    elif any(x in desc_lower or x in name_lower for x in ['stock', 'sc_o_stock']):
+                        results['cable_type'] = 'STOCK'
+                        if '12' in desc_lower or '12' in name_lower:
                             results['stock_12'] += calculate_line_length(coord_text)
-                        elif '24-sc_o_stock' in desc_lower:
+                        elif '24' in desc_lower or '24' in name_lower:
                             results['stock_24'] += calculate_line_length(coord_text)
                     
-                    elif any(x in name_lower or x in desc_lower for x in ['ds', 'dis existing']):
-                        # Existing cable (track but don't calculate)
-                        pass
+                    # Default to ADSS if no clear indicator (with warning)
+                    elif results['cable_type'] is None:
+                        st.warning("Jenis kabel tidak spesifik, default ke ADSS")
+                        results['cable_type'] = 'ADSS'
+                        if '12' in desc_lower or '12' in name_lower:
+                            results['adss_12'] += calculate_line_length(coord_text)
+                        elif '24' in desc_lower or '24' in name_lower:
+                            results['adss_24'] += calculate_line_length(coord_text)
 
                 # 4. OTB Identification
                 elif 'otb' in name_lower and ('new' in name_lower or 'baru' in name_lower):
@@ -219,15 +232,27 @@ def calculate_volumes(inputs):
     total_odp = inputs['odp_8'] + inputs['odp_16']
     total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
     
-    # Determine cable type
-    is_adss = inputs['adss_12'] > 0 or inputs['adss_24'] > 0
-    is_stock = inputs['kabel_12'] > 0 or inputs['kabel_24'] > 0
+    # Determine cable type from KML or manual input
+    is_adss = inputs.get('cable_type') == 'ADSS' or inputs['adss_12'] > 0 or inputs['adss_24'] > 0
+    is_stock = inputs.get('cable_type') == 'STOCK' or inputs['kabel_12'] > 0 or inputs['kabel_24'] > 0
     
-    # Volume kabel
-    vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
-    vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
-    vol_adss_12 = round(inputs['adss_12'] * 1.02) if inputs['adss_12'] > 0 else 0
-    vol_adss_24 = round(inputs['adss_24'] * 1.02) if inputs['adss_24'] > 0 else 0
+    # Volume kabel - prioritize KML data if available
+    if inputs.get('cable_type') == 'ADSS':
+        vol_adss_12 = round(inputs['adss_12'] * 1.02) if inputs['adss_12'] > 0 else 0
+        vol_adss_24 = round(inputs['adss_24'] * 1.02) if inputs['adss_24'] > 0 else 0
+        vol_kabel_12 = 0
+        vol_kabel_24 = 0
+    elif inputs.get('cable_type') == 'STOCK':
+        vol_kabel_12 = round(inputs['stock_12'] * 1.02) if inputs['stock_12'] > 0 else 0
+        vol_kabel_24 = round(inputs['stock_24'] * 1.02) if inputs['stock_24'] > 0 else 0
+        vol_adss_12 = 0
+        vol_adss_24 = 0
+    else:
+        # Manual input fallback
+        vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
+        vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
+        vol_adss_12 = round(inputs['adss_12'] * 1.02) if inputs['adss_12'] > 0 else 0
+        vol_adss_24 = round(inputs['adss_24'] * 1.02) if inputs['adss_24'] > 0 else 0
 
     # PU-AS atau PU-AS-HL/SC
     if is_adss:
@@ -252,9 +277,9 @@ def calculate_volumes(inputs):
     # Base Tray
     vol_base_tray_odc = 0
     if inputs['sumber'] == "ODC":
-        if inputs['kabel_12'] > 0:
+        if vol_kabel_12 > 0:
             vol_base_tray_odc = 1
-        elif inputs['kabel_24'] > 0:
+        elif vol_kabel_24 > 0:
             vol_base_tray_odc = 2
 
     # Connectors
@@ -346,7 +371,8 @@ def process_boq_template(uploaded_file, inputs, lop_name):
                 'total': total,
                 'cpp': cpp,
                 'total_odp': total_odp,
-                'total_ports': total_odp * 8
+                'total_ports': total_odp * 8,
+                'cable_type': inputs.get('cable_type', 'Manual Input')
             },
             'updated_items': [item for item in items if item['volume'] > 0]
         }
@@ -377,37 +403,58 @@ def show_manual_input_form():
             )
 
         st.subheader("📦 Kebutuhan Kabel")
+        st.markdown("**Pilih jenis kabel utama:**")
+        cable_type = st.radio(
+            "Jenis Kabel",
+            ["ADSS", "STOCK"],
+            index=0 if st.session_state.form_values.get('cable_type') != "STOCK" else 1,
+            horizontal=True,
+            key="cable_type_manual"
+        )
+        
         col1, col2 = st.columns(2)
         with col1:
-            kabel_12 = st.number_input(
-                "12 Core STOCK (meter)",
-                min_value=0.0,
-                value=st.session_state.form_values['kabel_12'],
-                step=1.0,
-                format="%.1f"
-            )
-            adss_12 = st.number_input(
-                "ADSS 12 Core (meter)",
-                min_value=0.0,
-                value=st.session_state.form_values['adss_12'],
-                step=1.0,
-                format="%.1f"
-            )
+            if cable_type == "STOCK":
+                kabel_12 = st.number_input(
+                    "12 Core STOCK (meter)*",
+                    min_value=0.0,
+                    value=st.session_state.form_values['kabel_12'],
+                    step=1.0,
+                    format="%.1f"
+                )
+                kabel_24 = st.number_input(
+                    "24 Core STOCK (meter)",
+                    min_value=0.0,
+                    value=st.session_state.form_values['kabel_24'],
+                    step=1.0,
+                    format="%.1f"
+                )
+                adss_12 = 0.0
+                adss_24 = 0.0
+            else:
+                adss_12 = st.number_input(
+                    "ADSS 12 Core (meter)*",
+                    min_value=0.0,
+                    value=st.session_state.form_values['adss_12'],
+                    step=1.0,
+                    format="%.1f"
+                )
+                adss_24 = st.number_input(
+                    "ADSS 24 Core (meter)",
+                    min_value=0.0,
+                    value=st.session_state.form_values['adss_24'],
+                    step=1.0,
+                    format="%.1f"
+                )
+                kabel_12 = 0.0
+                kabel_24 = 0.0
         with col2:
-            kabel_24 = st.number_input(
-                "24 Core STOCK (meter)",
-                min_value=0.0,
-                value=st.session_state.form_values['kabel_24'],
-                step=1.0,
-                format="%.1f"
-            )
-            adss_24 = st.number_input(
-                "ADSS 24 Core (meter)",
-                min_value=0.0,
-                value=st.session_state.form_values['adss_24'],
-                step=1.0,
-                format="%.1f"
-            )
+            if cable_type == "STOCK":
+                st.write("")  # Spacer
+                st.write("")  # Spacer
+            else:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
 
         st.subheader("📊 ODP & Tiang")
         col1, col2 = st.columns(2)
@@ -427,12 +474,29 @@ def show_manual_input_form():
         st.subheader("📍 Konfigurasi Tiang")
         col1, col2 = st.columns(2)
         with col1:
-            total_tiang = st.number_input(
-                "Total Tiang (ADSS)*",
-                min_value=0,
-                value=st.session_state.form_values['total_tiang'],
-                help="Digunakan untuk perhitungan ADSS"
-            )
+            if cable_type == "ADSS":
+                total_tiang = st.number_input(
+                    "Total Tiang (ADSS)*",
+                    min_value=0,
+                    value=st.session_state.form_values['total_tiang'],
+                    help="Digunakan untuk perhitungan ADSS"
+                )
+                tiang_new = 0
+                tiang_existing = 0
+            else:
+                total_tiang = 0
+                tiang_new = st.number_input(
+                    "Tiang Baru*",
+                    min_value=0,
+                    value=st.session_state.form_values['tiang_new'],
+                    help="Digunakan untuk kabel STOCK"
+                )
+                tiang_existing = st.number_input(
+                    "Tiang Eksisting*",
+                    min_value=0,
+                    value=st.session_state.form_values['tiang_existing'],
+                    help="Digunakan untuk kabel STOCK"
+                )
             
             pos_odp_raw = st.text_input(
                 "Posisi ODP (contoh: 5,9,14)", 
@@ -441,20 +505,6 @@ def show_manual_input_form():
             )
         
         with col2:
-            st.markdown('<p class="disabled-label">Untuk Kabel STOCK:</p>', unsafe_allow_html=True)
-            tiang_new = st.number_input(
-                "Tiang Baru",
-                min_value=0,
-                value=st.session_state.form_values['tiang_new'],
-                help="Digunakan untuk kabel STOCK"
-            )
-            tiang_existing = st.number_input(
-                "Tiang Eksisting",
-                min_value=0,
-                value=st.session_state.form_values['tiang_existing'],
-                help="Digunakan untuk kabel STOCK"
-            )
-            
             pos_belokan_raw = st.text_input(
                 "Posisi Tikungan (contoh: 7,13)", 
                 value=",".join(map(str, st.session_state.form_values['posisi_belokan'])),
@@ -510,7 +560,8 @@ def show_manual_input_form():
                 'posisi_odp': posisi_odp,
                 'posisi_belokan': posisi_belokan,
                 'jumlah_closure': jumlah_closure,
-                'uploaded_file': uploaded_file
+                'uploaded_file': uploaded_file,
+                'cable_type': cable_type
             }
 
             # Validate and process
@@ -598,8 +649,13 @@ def show_kml_input_form():
                 'posisi_belokan': posisi_belokan,
                 'jumlah_closure': kml_data.get('closure_count', 0),
                 'otb_count': kml_data.get('otb_count', 0),
-                'uploaded_file': uploaded_file
+                'uploaded_file': uploaded_file,
+                'cable_type': kml_data.get('cable_type', None)
             }
+            
+            # Show cable type detection result
+            if inputs['cable_type']:
+                st.info(f"Jenis kabel terdeteksi: {inputs['cable_type']}")
             
             # Process BOQ
             result = process_boq_template(uploaded_file, inputs, inputs['lop_name'])
@@ -646,6 +702,7 @@ def main():
         with col1:
             st.metric("Total ODP", summary['total_odp'])
             st.metric("Total Port", summary['total_ports'])
+            st.metric("Jenis Kabel", summary.get('cable_type', 'Manual Input'))
         with col2:
             st.metric("Material", f"Rp {summary['material']:,.0f}")
             st.metric("Jasa", f"Rp {summary['jasa']:,.0f}")

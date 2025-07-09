@@ -113,20 +113,11 @@ def hitung_puas_sc():
 def calculate_volumes(inputs):
     """Calculate all required volumes based on input parameters"""
     total_odp = inputs['odp_8'] + inputs['odp_16']
-    total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
     
-    # Tentukan jenis kabel dan total tiang
-    is_adss = inputs['adss_12'] > 0 or inputs['adss_24'] > 0
-    is_stock = inputs['kabel_12'] > 0 or inputs['kabel_24'] > 0
-    
-    if is_adss:
-        total_tiang = inputs['total_tiang']
-        tiang_new = 0
-        tiang_existing = 0
-    else:
-        total_tiang = inputs['tiang_new'] + inputs['tiang_existing']
-        tiang_new = inputs['tiang_new']
-        tiang_existing = inputs['tiang_existing']
+    # Tiang calculation (same for both ADSS and non-ADSS)
+    tiang_new = inputs['tiang_new']  # Always track new poles
+    tiang_existing = inputs['tiang_existing']
+    total_tiang = tiang_new + tiang_existing
 
     # Volume kabel
     vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
@@ -134,11 +125,8 @@ def calculate_volumes(inputs):
     vol_adss_12 = round(inputs['adss_12'] * 1.02) if inputs['adss_12'] > 0 else 0
     vol_adss_24 = round(inputs['adss_24'] * 1.02) if inputs['adss_24'] > 0 else 0
 
-    # Tiang baru (selalu dimasukkan)
-    vol_tiang_baru = inputs['tiang_new']
-
     # PU-AS atau PU-AS-HL/SC
-    if is_adss:
+    if inputs['adss_12'] > 0 or inputs['adss_24'] > 0:
         vol_puas_hl = hitung_puas_hl(total_tiang, inputs['sumber'])
         vol_puas_sc = hitung_puas_sc()
         vol_puas = 0
@@ -147,11 +135,11 @@ def calculate_volumes(inputs):
         vol_puas_hl = 0
         vol_puas_sc = 0
 
-    # PS-1-4-ODC (1 untuk setiap 4 ODP)
-    vol_ps_1_4_odc = math.ceil(total_odp / 4) if inputs['sumber'] == "ODC" else 0
+    # PS-1-4-ODC (1 untuk setiap 4 ODP, minimal 1 jika ada ODP)
+    vol_ps_1_4_odc = max(1, math.ceil(total_odp / 4)) if total_odp > 0 and inputs['sumber'] == "ODC" else 0
 
     # Closure
-    vol_closure = inputs['jumlah_closure']
+    vol_closure = inputs.get('jumlah_closure', 0)
 
     # OS-SM-1
     vol_os_sm_1_odc = total_odp * 2 if inputs['sumber'] == "ODC" else 0
@@ -167,9 +155,8 @@ def calculate_volumes(inputs):
             vol_base_tray_odc = 2
 
     # Connectors
-    vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
+    vol_pc_upc = max(1, math.ceil(total_odp / 4)) if total_odp > 0 else 0
     vol_pc_apc = 18 if vol_pc_upc == 1 else vol_pc_upc * 2 if vol_pc_upc > 1 else 0
-    vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if inputs['sumber'] == "ODC" and total_odp > 0 else 0
 
     # Komponen lain
     vol_tc_02_odc = 1 if inputs['sumber'] == "ODC" else 0
@@ -183,16 +170,16 @@ def calculate_volumes(inputs):
         {"designator": "AC-OF-SM-ADSS-24D", "volume": vol_adss_24},
         {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
-        {"designator": "PU-S7.0-400NM", "volume": tiang_new},
+        {"designator": "PU-S7.0-400NM", "volume": tiang_new},  # Always included
         {"designator": "PU-AS", "volume": vol_puas},
         {"designator": "PU-AS-HL", "volume": vol_puas_hl},
         {"designator": "PU-AS-SC", "volume": vol_puas_sc},
+        {"designator": "PS-1-4-ODC", "volume": vol_ps_1_4_odc},
         {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
         {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
         {"designator": "OS-SM-1", "volume": vol_os_sm_1},
         {"designator": "PC-UPC-652-2", "volume": vol_pc_upc},
         {"designator": "PC-APC/UPC-652-A1", "volume": vol_pc_apc},
-        {"designator": "PS-1-4-ODC", "volume": vol_ps_1_4_odc},
         {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "BC-TR-0.6", "volume": vol_bc_tr},

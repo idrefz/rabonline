@@ -995,26 +995,26 @@ def show():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-        with col2:
-            if st.session_state.boq_state.get('is_adss', False):
-                try:
-                    if 'kml_file' in st.session_state.boq_form_values and st.session_state.boq_form_values['kml_file'] is not None:
-                        modified_kml = generate_adss_kml(
-                            st.session_state.boq_form_values,
-                            st.session_state.boq_form_values['kml_file']
-                        )
-                        if modified_kml:
-                            st.download_button(
-                                label="🗺️ Download Modified KML",
-                                data=modified_kml,
-                                file_name=f"KML-ADSS-{st.session_state.boq_state['project_name']}.kml",
-                                mime="application/vnd.google-earth.kml+xml",
-                                use_container_width=True
-                            )
-                    else:
-                        st.warning("File KML tidak ditemukan untuk di-generate")
-                except Exception as e:
-                    st.error(f"Gagal memproses KML: {str(e)}")
+    with col2:
+    if st.session_state.boq_state.get('is_adss', False):
+        try:
+            if 'kml_file' in st.session_state.boq_form_values and st.session_state.boq_form_values['kml_file'] is not None:
+                modified_kml = generate_adss_kml(
+                    inputs=st.session_state.boq_form_values,
+                    original_kml=st.session_state.boq_form_values['kml_file']
+                )
+                if modified_kml:
+                    st.download_button(
+                        label="🗺️ Download Modified KML",
+                        data=modified_kml,
+                        file_name=f"KML-ADSS-{st.session_state.boq_state['project_name']}.kml",
+                        mime="application/vnd.google-earth.kml+xml",
+                        use_container_width=True
+                    )
+            else:
+                st.warning("File KML tidak ditemukan untuk di-generate")
+        except Exception as e:
+            st.error(f"Gagal memproses KML: {str(e)}")
         with col3:
             if st.button("🔄 Buat BOQ Baru", use_container_width=True):
                 reset_boq_application()

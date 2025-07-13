@@ -166,6 +166,7 @@ def parse_kml_file_adss(kml_file, sumber):
         values = {
             'tiang_new': 0,
             'tiang_existing': 0,
+            'total_tiang': 0,
             'kabel_12': 0.0,
             'kabel_24': 0.0,
             'kabel_adss_12': 0.0,
@@ -174,8 +175,9 @@ def parse_kml_file_adss(kml_file, sumber):
             'odp_16': 0,
             'closure': 0,
             'otb_12': 0,
-            'pu_as_hl_count': 0,  # Count of PU-AS-HL markers found
-            'pu_as_sc_count': 0   # Count of poles without PU-AS-HL
+            'pu_as_hl_count': 0,  # Count of PU-AS-HL markers (1 per description)
+            'pu_as_hl': 0,        # Final calculated volume for PU-AS-HL
+            'pu_as_sc': 0         # Final calculated volume for PU-AS-SC
         }
         
         for placemark in root.findall('.//kml:Placemark', ns):
@@ -188,12 +190,10 @@ def parse_kml_file_adss(kml_file, sumber):
             if placemark.find('.//kml:Point', ns) is not None:
                 if any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW"]):
                     values['tiang_new'] += 1
-                    if "PU-AS-HL" not in desc:
-                        values['pu_as_sc_count'] += 1
+                    values['total_tiang'] += 1
                 elif any(keyword in name for keyword in ["TE", "TIANG EXISTING"]):
                     values['tiang_existing'] += 1
-                    if "PU-AS-HL" not in desc:
-                        values['pu_as_sc_count'] += 1
+                    values['total_tiang'] += 1
                 elif "ODP" in name and any(keyword in name for keyword in ["NEW", "BARU"]):
                     if "8" in name or "ODP Solid-PB-8 AS" in desc:
                         values['odp_8'] += 1
@@ -268,14 +268,41 @@ def parse_kml_file_adss(kml_file, sumber):
         else:  # ODP
             values['pu_as_hl'] = (values['pu_as_hl_count'] * 2) - 2 if values['pu_as_hl_count'] > 0 else 0
         
-        # PU-AS-SC is simply the count of poles without PU-AS-HL description
-        values['pu_as_sc'] = values['pu_as_sc_count']
+        # Calculate PU-AS-SC volume (total poles minus PU-AS-HL count)
+        values['pu_as_sc'] = values['total_tiang'] - values['pu_as_hl_count']
         
         return values
     
     except Exception as e:
         st.error(f"KML parsing failed: {str(e)}")
         return None
+def generate_adss_kml(inputs, original_kml):
+    try:
+        # Parse the original KML
+        kml_data = original_kml.read()
+        root = ET.fromstring(kml_data)
+        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        
+        # Add PU-AS-SC description to poles without PU-AS-HL
+        for placemark in root.findall('.//kml:Placemark', ns):
+            name_elem = placemark.find('kml:name', ns)
+            desc_elem = placemark.find('kml:description', ns)
+            
+            if name_elem is not None and desc_elem is not None:
+                name = name_elem.text.upper().strip() if name_elem.text else ""
+                desc = desc_elem.text.strip() if desc_elem.text else ""
+                
+                # Check if it's a pole without PU-AS-HL description
+                if (any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW", "TE", "TIANG EXISTING"]):
+                    if "PU-AS-HL" not in desc:
+                        if desc_elem.text:
+                            desc_elem.text += "\nPU-AS-SC"
+                        else:
+                            desc_elem.text = "PU-AS-SC"
+        
+        # Convert back to bytes
+        modified_kml = ET.tostring(root, encoding='utf-8', method='xml')
+        return BytesIO(modified_kml)
 
 def calculate_volumes_adss(inputs):
     total_odp = inputs['odp_8'] + inputs['odp_16']
@@ -447,8 +474,8 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             'updated_items': [item for item in items if item['volume'] > 0]
         }
     
-    except Exception as e:
-        st.error(f"Error processing BOQ template: {str(e)}")
+     except Exception as e:
+        st.error(f"Error generating modified KML: {str(e)}")
         return None
 
 def generate_adss_kml(inputs):
@@ -918,7 +945,9 @@ def show():
         st.divider()
         st.subheader("📊 Hasil BOQ")
         
-        if st.session_state.boq_state.get('is_adss', False):
+         if st.session_state.boq_state.get('is_adss', False):
+    modified_kml = generate_adss_kml(
+        st.session_state.boq_form_values,
             st.markdown("**Mode ADSS**")
         
         summary = st.session_state.boq_state['summary']

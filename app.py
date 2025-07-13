@@ -961,7 +961,7 @@ def show():
     with tab3:
         adss_input_form()
     
-  if 'boq_state' in st.session_state and st.session_state.boq_state.get('ready', False):
+    if 'boq_state' in st.session_state and st.session_state.boq_state.get('ready', False):
         st.divider()
         st.subheader("📊 Hasil BOQ")
         

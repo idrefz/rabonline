@@ -160,6 +160,71 @@ def generate_modified_kml(original_kml_bytes, puas_sc_placemarks):
         if desc_elem is None:
             desc_elem = ET.SubElement(placemark, '{http://www.opengis.net/kml/2.2}description')
             desc_elem.text = "PU-AS-SC"
+        elif "PU-AS-SC" not in desc_elem.text.upper():
+            desc_elem.text = (desc_elem.text or "") + " | PU-AS-SC"
+
+    kml_tree = ET.ElementTree(root)
+    kml_bytes = BytesIO()
+    kml_tree.write(kml_bytes, encoding='utf-8', xml_declaration=True)
+    kml_bytes.seek(0)
+    return kml_bytes
+
+# ------------------- Volume Calculator ADSS ------------------- #
+def calculate_volumes_adss(inputs):
+    total_odp = inputs['odp_8'] + inputs['odp_16']
+
+    vol_adss_12d = round(inputs.get('adss_12d', 0) * 1.02)
+    vol_adss_24d = round(inputs.get('adss_24d', 0) * 1.02)
+
+    vol_puas = max(0, (total_odp * 2) - 1 + inputs['tiang_new'] + inputs['tiang_existing'] + inputs.get('tikungan', 0))
+
+    if inputs['sumber'] == "ODC":
+        vol_os_sm_1_odc = total_odp * 2
+        vol_os_sm_1_odp = 0
+        vol_base_tray = 1 if vol_adss_12d > 0 else 2 if vol_adss_24d > 0 else 0
+        vol_tc_02_odc = 1
+        vol_dd_hdpe = 6
+        vol_bc_tr = 3
+    else:
+        vol_os_sm_1_odc = 0
+        vol_os_sm_1_odp = total_odp * 2
+        vol_base_tray = 0
+        vol_tc_02_odc = 0
+        vol_dd_hdpe = 0
+        vol_bc_tr = 0
+
+    vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
+    vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
+    vol_pc_apc = 18 if vol_pc_upc == 1 else vol_pc_upc * 2 if vol_pc_upc > 1 else 0
+    vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
+    vol_ps_1_8_odp = 1 if inputs.get('otb_12', 0) > 0 else 0
+
+    return [
+        {"designator": "AC-OF-SM-ADSS-12D", "volume": vol_adss_12d},
+        {"designator": "AC-OF-SM-ADSS-24D", "volume": vol_adss_24d},
+        {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
+        {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
+        {"designator": "PU-AS-HL", "volume": inputs.get('puas_hl', 0)},
+        {"designator": "PU-AS-SC", "volume": inputs.get('puas_sc', 0)},
+        {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
+        {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
+        {"designator": "OS-SM-1", "volume": vol_os_sm_1},
+        {"designator": "PC-UPC-652-2", "volume": vol_pc_upc},
+        {"designator": "PC-APC/UPC-652-A1", "volume": vol_pc_apc},
+        {"designator": "PS-1-4-ODC", "volume": vol_ps_1_4_odc},
+        {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
+        {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
+        {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
+        {"designator": "Base Tray ODC", "volume": vol_base_tray},
+        {"designator": "SC-OF-SM-24", "volume": inputs.get('closure', 0)},
+        {"designator": "TC-SM-12", "volume": inputs.get('otb_12', 0)},
+        {"designator": "PS-1-8-ODP", "volume": vol_ps_1_8_odp},
+        {
+            "designator": "Preliminary Project HRB/Kawasan Khusus",
+            "volume": 1 if inputs.get('izin') else 0,
+            "izin_value": float(inputs['izin']) if inputs.get('izin') and str(inputs['izin']).replace('.', '', 1).isdigit() else 0
+        }
+    ]
 
 # ------------------- Excel Processing ------------------- #
 def process_boq_template(template_file, inputs, lop_name, custom_items=None):

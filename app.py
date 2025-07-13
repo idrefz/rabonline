@@ -174,8 +174,8 @@ def parse_kml_file_adss(kml_file, sumber):
             'odp_16': 0,
             'closure': 0,
             'otb_12': 0,
-            'pu_as_hl': 0,
-            'pu_as_sc': 0
+            'pu_as_hl_count': 0,  # Count of PU-AS-HL markers found
+            'pu_as_sc_count': 0   # Count of poles without PU-AS-HL
         }
         
         for placemark in root.findall('.//kml:Placemark', ns):
@@ -189,11 +189,11 @@ def parse_kml_file_adss(kml_file, sumber):
                 if any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW"]):
                     values['tiang_new'] += 1
                     if "PU-AS-HL" not in desc:
-                        values['pu_as_sc'] += 1
+                        values['pu_as_sc_count'] += 1
                 elif any(keyword in name for keyword in ["TE", "TIANG EXISTING"]):
                     values['tiang_existing'] += 1
                     if "PU-AS-HL" not in desc:
-                        values['pu_as_sc'] += 1
+                        values['pu_as_sc_count'] += 1
                 elif "ODP" in name and any(keyword in name for keyword in ["NEW", "BARU"]):
                     if "8" in name or "ODP Solid-PB-8 AS" in desc:
                         values['odp_8'] += 1
@@ -204,10 +204,7 @@ def parse_kml_file_adss(kml_file, sumber):
                 elif any(keyword in name for keyword in ["CL", "CLOSURE"]):
                     values['closure'] += 1
                 elif "PU-AS-HL" in desc:
-                    if "PU-AS-HL-END" in desc or "PU-AS-HL-BEGIN" in desc:
-                        values['pu_as_hl'] += 1
-                    else:
-                        values['pu_as_hl'] += 2
+                    values['pu_as_hl_count'] += 1
             
             elif placemark.find('.//kml:LineString', ns) is not None:
                 if any(keyword in name for keyword in ["DIS NEW", "DISTRIBUSI", "AC-OF-SM-12"]):
@@ -265,9 +262,14 @@ def parse_kml_file_adss(kml_file, sumber):
                         except ValueError:
                             continue
         
-        # Additional PU-AS-HL if source is ODC
+        # Calculate PU-AS-HL based on source
         if sumber == "ODC":
-            values['pu_as_hl'] += 1
+            values['pu_as_hl'] = (values['pu_as_hl_count'] * 2) - 1
+        else:  # ODP
+            values['pu_as_hl'] = (values['pu_as_hl_count'] * 2) - 2 if values['pu_as_hl_count'] > 0 else 0
+        
+        # PU-AS-SC is simply the count of poles without PU-AS-HL description
+        values['pu_as_sc'] = values['pu_as_sc_count']
         
         return values
     
@@ -275,21 +277,18 @@ def parse_kml_file_adss(kml_file, sumber):
         st.error(f"KML parsing failed: {str(e)}")
         return None
 
-def calculate_puas(total_odp, tiang_new, tiang_existing, tikungan):
-    return max(0, (total_odp * 2) - 1 + tiang_new + tiang_existing + tikungan)
-
-def calculate_volumes(inputs):
+def calculate_volumes_adss(inputs):
     total_odp = inputs['odp_8'] + inputs['odp_16']
     
     vol_kabel_12 = round(inputs['kabel_12'] * 1.02) if inputs['kabel_12'] > 0 else 0
     vol_kabel_24 = round(inputs['kabel_24'] * 1.02) if inputs['kabel_24'] > 0 else 0
-    
-    vol_puas = calculate_puas(total_odp, inputs['tiang_new'], inputs['tiang_existing'], inputs['tikungan'])
+    vol_kabel_adss_12 = round(inputs['kabel_adss_12'] * 1.02) if inputs['kabel_adss_12'] > 0 else 0
+    vol_kabel_adss_24 = round(inputs['kabel_adss_24'] * 1.02) if inputs['kabel_adss_24'] > 0 else 0
     
     if inputs['sumber'] == "ODC":
         vol_os_sm_1_odc = total_odp * 2
         vol_os_sm_1_odp = 0
-        vol_base_tray = 1 if vol_kabel_12 > 0 else 2 if vol_kabel_24 > 0 else 0
+        vol_base_tray = 1 if (vol_kabel_12 > 0 or vol_kabel_adss_12 > 0) else 2 if (vol_kabel_24 > 0 or vol_kabel_adss_24 > 0) else 0
         vol_tc_02_odc = 1
         vol_dd_hdpe = 6
         vol_bc_tr = 3
@@ -310,10 +309,13 @@ def calculate_volumes(inputs):
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
+        {"designator": "AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
+        {"designator": "AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
         {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
         {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
-        {"designator": "PU-AS", "volume": vol_puas},
+        {"designator": "PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},  # Ensure not negative
+        {"designator": "PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
         {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
         {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
         {"designator": "OS-SM-1", "volume": vol_os_sm_1},

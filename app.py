@@ -320,6 +320,10 @@ def generate_adss_kml(inputs, original_kml):
         # Convert back to bytes
         modified_kml = ET.tostring(root, encoding='utf-8', method='xml')
         return BytesIO(modified_kml)
+    
+    except Exception as e:
+        st.error(f"Error generating modified KML: {str(e)}")
+        return None
 def calculate_volumes_adss(inputs):
     total_odp = inputs['odp_8'] + inputs['odp_16']
     
@@ -416,7 +420,7 @@ def calculate_volumes_adss(inputs):
         {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
         {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
-        {"designator": "PU-AS-HL", "volume": inputs.get('pu_as_hl', 0)},
+        {"designator": "PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
         {"designator": "PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
         {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
         {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},

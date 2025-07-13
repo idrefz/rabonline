@@ -961,58 +961,58 @@ def show():
     with tab3:
         adss_input_form()
     
-if st.session_state.boq_state.get('ready', False):
-    st.divider()
-    st.subheader("📊 Hasil BOQ")
-    
-    if st.session_state.boq_state.get('is_adss', False):
-        st.markdown("**Mode ADSS**")
-    
-    summary = st.session_state.boq_state['summary']
-    cols = st.columns(4)
-    with cols[0]:
-        st.metric("Total ODP", summary['total_odp'])
-        st.metric("Total Port", summary['total_ports'])
-    with cols[1]:
-        st.metric("Material", f"Rp {summary['material']:,.0f}")
-    with cols[2]:
-        st.metric("Jasa", f"Rp {summary['jasa']:,.0f}")
-    with cols[3]:
-        st.metric("Total Biaya", f"Rp {summary['total']:,.0f}")
-        st.metric("CPP", f"Rp {summary['cpp']:,.0f}")
-    
-    st.subheader("📋 Item yang Diupdate")
-    df_items = pd.DataFrame(st.session_state.boq_state['updated_items'])
-    st.dataframe(df_items, hide_index=True, use_container_width=True)
-    
-    st.subheader("📥 Download")
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        st.download_button(
-            label="⬇️ Download BOQ",
-            data=st.session_state.boq_state['excel_data'],
-            file_name=f"BOQ-{st.session_state.boq_state['project_name']}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-    with col2:
+  if 'boq_state' in st.session_state and st.session_state.boq_state.get('ready', False):
+        st.divider()
+        st.subheader("📊 Hasil BOQ")
+        
         if st.session_state.boq_state.get('is_adss', False):
-            modified_kml = generate_adss_kml(
-                st.session_state.boq_form_values,
-                st.session_state.boq_form_values['kml_file']
+            st.markdown("**Mode ADSS**")
+        
+        summary = st.session_state.boq_state['summary']
+        cols = st.columns(4)
+        with cols[0]:
+            st.metric("Total ODP", summary['total_odp'])
+            st.metric("Total Port", summary['total_ports'])
+        with cols[1]:
+            st.metric("Material", f"Rp {summary['material']:,.0f}")
+        with cols[2]:
+            st.metric("Jasa", f"Rp {summary['jasa']:,.0f}")
+        with cols[3]:
+            st.metric("Total Biaya", f"Rp {summary['total']:,.0f}")
+            st.metric("CPP", f"Rp {summary['cpp']:,.0f}")
+        
+        st.subheader("📋 Item yang Diupdate")
+        df_items = pd.DataFrame(st.session_state.boq_state['updated_items'])
+        st.dataframe(df_items, hide_index=True, use_container_width=True)
+        
+        st.subheader("📥 Download")
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            st.download_button(
+                label="⬇️ Download BOQ",
+                data=st.session_state.boq_state['excel_data'],
+                file_name=f"BOQ-{st.session_state.boq_state['project_name']}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
             )
-            if modified_kml:
-                st.download_button(
-                    label="🗺️ Download Modified KML",
-                    data=modified_kml,
-                    file_name=f"KML-ADSS-{st.session_state.boq_state['project_name']}.kml",
-                    mime="application/vnd.google-earth.kml+xml",
-                    use_container_width=True
+        with col2:
+            if st.session_state.boq_state.get('is_adss', False):
+                modified_kml = generate_adss_kml(
+                    st.session_state.boq_form_values,
+                    st.session_state.boq_form_values['kml_file']
                 )
-    with col3:
-        if st.button("🔄 Buat BOQ Baru", use_container_width=True):
-            reset_boq_application()
-            st.rerun()
+                if modified_kml:
+                    st.download_button(
+                        label="🗺️ Download Modified KML",
+                        data=modified_kml,
+                        file_name=f"KML-ADSS-{st.session_state.boq_state['project_name']}.kml",
+                        mime="application/vnd.google-earth.kml+xml",
+                        use_container_width=True
+                    )
+        with col3:
+            if st.button("🔄 Buat BOQ Baru", use_container_width=True):
+                reset_boq_application()
+                st.rerun()
 
 def main():
     show()

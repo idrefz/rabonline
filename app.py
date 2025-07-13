@@ -236,7 +236,7 @@ def parse_kml_file_adss(kml_file, sumber):
                                 values['kabel_12'] += total_length
                         except ValueError:
                             continue
-                if "AC-OF-SM-ADSS-12D" in name:
+                elif "AC-OF-SM-ADSS-12D" in name:
                     coords_elem = placemark.find('.//kml:coordinates', ns)
                     if coords_elem is not None and coords_elem.text:
                         try:
@@ -253,7 +253,7 @@ def parse_kml_file_adss(kml_file, sumber):
                                     total_length += geodesic((lat1, lon1), (lat2, lon2)).meters
                                 values['kabel_adss_12'] += total_length
                         except ValueError:
-                            pass
+                            continue
                 elif "AC-OF-SM-ADSS-24D" in name:
                     coords_elem = placemark.find('.//kml:coordinates', ns)
                     if coords_elem is not None and coords_elem.text:
@@ -271,7 +271,7 @@ def parse_kml_file_adss(kml_file, sumber):
                                     total_length += geodesic((lat1, lon1), (lat2, lon2)).meters
                                 values['kabel_adss_24'] += total_length
                         except ValueError:
-                            pass
+                            continue
         
         # Calculate PU-AS-HL based on source
         if sumber == "ODC":
@@ -284,7 +284,7 @@ def parse_kml_file_adss(kml_file, sumber):
         
         # Ensure non-negative values
         values['pu_as_hl'] = max(values['pu_as_hl'], 0)
-        values['pu_as_sc'] = max(values['pu_as_sc'], 0)     
+        values['pu_as_sc'] = max(values['pu_as_sc'], 0)
         return values
     
     except Exception as e:
@@ -320,7 +320,6 @@ def generate_adss_kml(inputs, original_kml):
         # Convert back to bytes
         modified_kml = ET.tostring(root, encoding='utf-8', method='xml')
         return BytesIO(modified_kml)
-
 def calculate_volumes_adss(inputs):
     total_odp = inputs['odp_8'] + inputs['odp_16']
     

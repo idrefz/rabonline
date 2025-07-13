@@ -302,12 +302,12 @@ def generate_adss_kml(inputs, original_kml):
             name_elem = placemark.find('kml:name', ns)
             desc_elem = placemark.find('kml:description', ns)
             
-            if name_elem is not None and desc_elem is not None:
+            if name_elem is not None:
                 name = name_elem.text.upper().strip() if name_elem.text else ""
-                desc = desc_elem.text.strip() if desc_elem.text else ""
+                desc = desc_elem.text.strip() if desc_elem is not None and desc_elem.text else ""
                 
                 # Check if it's a pole without PU-AS-HL description
-                if (any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW", "TE", "TIANG EXISTING"]):
+                if any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW", "TE", "TIANG EXISTING"]):
                     if "PU-AS-HL" not in desc and "PU-AS-SC" not in desc and "PU-AS" not in desc:
                         # Add PU-AS-SC description
                         new_desc = "PU-AS-SC" if not desc else f"{desc}\nPU-AS-SC"
@@ -490,7 +490,7 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             'updated_items': [item for item in items if item['volume'] > 0]
         }
     
-     except Exception as e:
+    except Exception as e:
         st.error(f"Error generating modified KML: {str(e)}")
         return None
 

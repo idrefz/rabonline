@@ -175,9 +175,10 @@ def parse_kml_file_adss(kml_file, sumber):
             'odp_16': 0,
             'closure': 0,
             'otb_12': 0,
-            'pu_as_hl_count': 0,  # Count of PU-AS-HL markers (1 per description)
-            'pu_as_hl': 0,        # Final calculated volume for PU-AS-HL
-            'pu_as_sc': 0         # Final calculated volume for PU-AS-SC
+            'pu_as_hl_count': 0,  # Jumlah marker dengan deskripsi PU-AS-HL
+            'pu_as_sc_count': 0,  # Jumlah marker dengan deskripsi PU-AS atau PU-AS-SC
+            'pu_as_hl': 0,       # Volume akhir PU-AS-HL
+            'pu_as_sc': 0        # Volume akhir PU-AS-SC
         }
         
         for placemark in root.findall('.//kml:Placemark', ns):
@@ -185,15 +186,26 @@ def parse_kml_file_adss(kml_file, sumber):
             desc_elem = placemark.find('kml:description', ns)
             
             name = name_elem.text.upper().strip() if name_elem is not None and name_elem.text else ""
-            desc = desc_elem.text.strip() if desc_elem is not None and desc_elem.text else ""
+            desc = desc_elem.text.upper().strip() if desc_elem is not None and desc_elem.text else ""
             
             if placemark.find('.//kml:Point', ns) is not None:
-                if any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW"]):
-                    values['tiang_new'] += 1
+              # Check for poles (TE/TN)
+                if any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW", "TE", "TIANG EXISTING"]):
                     values['total_tiang'] += 1
-                elif any(keyword in name for keyword in ["TE", "TIANG EXISTING"]):
-                    values['tiang_existing'] += 1
-                    values['total_tiang'] += 1
+                    
+                    if "TIANG NEW" in name or "TN" in name:
+                        values['tiang_new'] += 1
+                    else:
+                        values['tiang_existing'] += 1
+                    
+                    # Check PU-AS-HL in description
+                    if "PU-AS-HL" in desc:
+                        values['pu_as_hl_count'] += 1
+                    # Check PU-AS or PU-AS-SC in description
+                    elif "PU-AS" in desc or "PU-AS-SC" in desc:
+                        values['pu_as_sc_count'] += 1
+                
+                # Other elements (ODP, OTB, etc)  
                 elif "ODP" in name and any(keyword in name for keyword in ["NEW", "BARU"]):
                     if "8" in name or "ODP Solid-PB-8 AS" in desc:
                         values['odp_8'] += 1
@@ -203,8 +215,7 @@ def parse_kml_file_adss(kml_file, sumber):
                     values['otb_12'] += 1
                 elif any(keyword in name for keyword in ["CL", "CLOSURE"]):
                     values['closure'] += 1
-                elif "PU-AS-HL" in desc:
-                    values['pu_as_hl_count'] += 1
+                
             
             elif placemark.find('.//kml:LineString', ns) is not None:
                 if any(keyword in name for keyword in ["DIS NEW", "DISTRIBUSI", "AC-OF-SM-12"]):
@@ -225,7 +236,7 @@ def parse_kml_file_adss(kml_file, sumber):
                                 values['kabel_12'] += total_length
                         except ValueError:
                             continue
-                elif "AC-OF-SM-ADSS-12D" in name:
+                if "AC-OF-SM-ADSS-12D" in name:
                     coords_elem = placemark.find('.//kml:coordinates', ns)
                     if coords_elem is not None and coords_elem.text:
                         try:
@@ -242,7 +253,7 @@ def parse_kml_file_adss(kml_file, sumber):
                                     total_length += geodesic((lat1, lon1), (lat2, lon2)).meters
                                 values['kabel_adss_12'] += total_length
                         except ValueError:
-                            continue
+                            pass
                 elif "AC-OF-SM-ADSS-24D" in name:
                     coords_elem = placemark.find('.//kml:coordinates', ns)
                     if coords_elem is not None and coords_elem.text:
@@ -260,7 +271,7 @@ def parse_kml_file_adss(kml_file, sumber):
                                     total_length += geodesic((lat1, lon1), (lat2, lon2)).meters
                                 values['kabel_adss_24'] += total_length
                         except ValueError:
-                            continue
+                            pass
         
         # Calculate PU-AS-HL based on source
         if sumber == "ODC":
@@ -271,6 +282,9 @@ def parse_kml_file_adss(kml_file, sumber):
         # Calculate PU-AS-SC volume (total poles minus PU-AS-HL count)
         values['pu_as_sc'] = values['total_tiang'] - values['pu_as_hl_count']
         
+        # Ensure non-negative values
+        values['pu_as_hl'] = max(values['pu_as_hl'], 0)
+        values['pu_as_sc'] = max(values['pu_as_sc'], 0)     
         return values
     
     except Exception as e:
@@ -294,11 +308,14 @@ def generate_adss_kml(inputs, original_kml):
                 
                 # Check if it's a pole without PU-AS-HL description
                 if (any(keyword in name for keyword in ["TN", "TN7", "TIANG NEW", "TE", "TIANG EXISTING"]):
-                    if "PU-AS-HL" not in desc:
-                        if desc_elem.text:
-                            desc_elem.text += "\nPU-AS-SC"
-                        else:
-                            desc_elem.text = "PU-AS-SC"
+                    if "PU-AS-HL" not in desc and "PU-AS-SC" not in desc and "PU-AS" not in desc:
+                        # Add PU-AS-SC description
+                        new_desc = "PU-AS-SC" if not desc else f"{desc}\nPU-AS-SC"
+                        
+                        # Create new description element if doesn't exist
+                        if desc_elem is None:
+                            desc_elem = ET.SubElement(placemark, 'description')
+                        desc_elem.text = new_desc
         
         # Convert back to bytes
         modified_kml = ET.tostring(root, encoding='utf-8', method='xml')

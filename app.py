@@ -995,7 +995,7 @@ def show():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-    with col2:
+        with col2:
             if st.session_state.boq_state.get('is_adss', False):
                 try:
                     if 'kml_file' in st.session_state.boq_form_values and st.session_state.boq_form_values['kml_file'] is not None:

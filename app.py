@@ -648,6 +648,23 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
         cpp = round(total / total_ports, 2) if total_ports > 0 else 0
         
         output = BytesIO()
+        # Add a sheet that explicitly lists updated items (designator, volume, izin_value if present)
+        try:
+            if 'Updated Items' in wb.sheetnames:
+                # remove existing sheet to avoid duplicates
+                del wb['Updated Items']
+        except Exception:
+            pass
+
+        updated_sheet = wb.create_sheet(title='Updated Items')
+        # header
+        updated_sheet.append(['designator', 'volume', 'izin_value'])
+        for item in [item for item in items if item.get('volume', 0) > 0]:
+            designator = item.get('designator', '')
+            volume = item.get('volume', 0)
+            izin_value = item.get('izin_value', '') if 'izin_value' in item else ''
+            updated_sheet.append([designator, volume, izin_value])
+
         wb.save(output)
         output.seek(0)
         

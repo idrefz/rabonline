@@ -583,9 +583,17 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
         jasa = 0.0
         for row in range(9, 1083):
             try:
+                # Determine the designator text in column B to apply RAB rules
+                designator_text = str(ws[f'B{row}'].value or "").strip()
                 h_mat = float(ws[f'E{row}'].value or 0)
                 h_jasa = float(ws[f'F{row}'].value or 0)
                 vol = float(ws[f'G{row}'].value or 0)
+
+                # Rule: if sumber == 'ODC', Base Tray ODC (J-/M-Base Tray ODC) should not contribute to RAB
+                if inputs.get('sumber') == 'ODC' and designator_text in ("J-Base Tray ODC", "M-Base Tray ODC"):
+                    # skip adding to material/jasa totals
+                    continue
+
                 material += h_mat * vol
                 jasa += h_jasa * vol
             except Exception:

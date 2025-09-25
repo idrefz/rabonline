@@ -697,9 +697,6 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
         wb.save(output)
         output.seek(0)
         
-        # Build updated_items list from what we actually wrote to the sheet (preserves what user downloads)
-        updated_items = list(written_map.values())
-
         return {
             'excel_data': output,
             'summary': {
@@ -710,7 +707,7 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
                 'total_odp': total_odp,
                 'total_ports': total_ports
             },
-            'updated_items': updated_items
+            'updated_items': [item for item in items if item['volume'] > 0]
         }
     
     except Exception as e:

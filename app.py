@@ -1093,7 +1093,7 @@ def adss_input_form():
             key='adss_template'
         )
 
-        submitted = st.form_submit_button("🚀 Generate BOQ ADSS", use_container_width=True)
+        submitted = st.form_submit_button("🚀 Generate BOQ OSP AKSES NEW", use_container_width=True)
         
         if submitted:
             if not st.session_state.boq_form_values.get('uploaded_file'):
@@ -1141,7 +1141,7 @@ def show():
     </style>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["📝 Manual Input", "🗺️ BOQ dari KML", "🌀 BOQ ADSS"])
+    tab1, tab2, tab3 = st.tabs(["📝 Manual Input", "🗺️ BOQ dari KML", "🌀 BOQ OSP AKSES NEW"])
     
     with tab1:
         manual_input_form()

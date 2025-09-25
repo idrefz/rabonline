@@ -628,12 +628,19 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             cell_value = str(ws[f'B{row}'].value or "").strip()
 
             for item in items:
-                # write volume when item has volume > 0
-                # or when source is ODC and the row is a Base Tray designator (we want them visible in the download)
+                # determine the volume to write
+                vol_value = item.get("volume", 0)
+                # If this is a Base Tray and source is ODC, always write the numeric volume (so J-/M- show numbers)
                 if cell_value == item["designator"] and (
                     item.get("volume", 0) > 0 or (inputs.get('sumber') == 'ODC' and item.get('designator') in base_tray_names)
                 ):
-                    ws[f'G{row}'] = item.get("volume", 0)
+                    # convert floats to int if they're whole numbers for cleaner Excel cells
+                    try:
+                        if isinstance(vol_value, float) and vol_value.is_integer():
+                            vol_value = int(vol_value)
+                    except Exception:
+                        pass
+                    ws[f'G{row}'] = vol_value
                     if "Preliminary" in cell_value and "izin_value" in item:
                         ws[f'F{row}'] = item["izin_value"]
 
@@ -673,10 +680,23 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             include = item.get('volume', 0) > 0 or (inputs.get('sumber') == 'ODC' and item.get('designator') in base_tray_names)
             if include:
                 designator = item.get('designator', '')
-                volume = item.get('volume', 0)
+                raw_volume = item.get('volume', 0)
+                # For base tray ODC entries, always present numeric volume
+                if inputs.get('sumber') == 'ODC' and designator in base_tray_names:
+                    volume = raw_volume
+                else:
+                    volume = raw_volume
+                # normalize numeric types for Excel
+                try:
+                    if isinstance(volume, float) and volume.is_integer():
+                        volume = int(volume)
+                except Exception:
+                    pass
                 izin_value = item.get('izin_value', '') if 'izin_value' in item else ''
                 updated_sheet.append([designator, volume, izin_value])
-                updated_items_list.append(item)
+                item_copy = dict(item)
+                item_copy['volume'] = volume
+                updated_items_list.append(item_copy)
 
         wb.save(output)
         output.seek(0)

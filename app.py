@@ -621,15 +621,41 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             items = calculate_volumes_adss(inputs)
         else:
             items = calculate_volumes(inputs)
-        
+        # Build maps for fast lookup and to handle variants (J-/M- prefixes)
+        direct_map = {}
+        base_map = {}
+        preliminary_item = None
+        for item in items:
+            des = item.get('designator')
+            vol = item.get('volume', 0)
+            if des:
+                direct_map[des] = vol
+                # capture preliminary special item (izin)
+                if 'Preliminary' in des:
+                    preliminary_item = item
+                # if designator starts with J- or M-, also map the base name
+                if des.startswith('J-') or des.startswith('M-'):
+                    base = des[2:]
+                    # prefer the first encountered non-zero volume for the base name
+                    if base not in base_map and vol is not None:
+                        base_map[base] = vol
+
         for row in range(9, 289):
             cell_value = str(ws[f'B{row}'].value or "").strip()
-            
-            for item in items:
-                if cell_value == item["designator"] and item["volume"] > 0:
-                    ws[f'G{row}'] = item["volume"]
-                    if "Preliminary" in cell_value and "izin_value" in item:
-                        ws[f'F{row}'] = item["izin_value"]
+            vol_to_write = None
+
+            # direct match first (covers original labels and any exact designator)
+            if cell_value in direct_map:
+                vol_to_write = direct_map[cell_value]
+            # fallback: if template uses original label but items only have J-/M- variants
+            elif cell_value in base_map:
+                vol_to_write = base_map[cell_value]
+
+            if vol_to_write and vol_to_write > 0:
+                ws[f'G{row}'] = vol_to_write
+                # write izin_value for preliminary row if available
+                if 'Preliminary' in cell_value and preliminary_item and 'izin_value' in preliminary_item:
+                    ws[f'F{row}'] = preliminary_item.get('izin_value', ws[f'F{row}'].value)
         
         material = jasa = 0.0
         for row in range(9, 289):

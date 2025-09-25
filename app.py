@@ -421,7 +421,7 @@ def calculate_volumes_adss(inputs):
         {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "Preliminary Project HRB/Kawasan Khusus",
+            "designator": "J-Preliminary Project",
             "volume": 1 if inputs['izin'] else 0,
             "izin_value": float(inputs['izin']) if inputs['izin'] and inputs['izin'].replace('.', '', 1).isdigit() else 0
         }
@@ -621,41 +621,61 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             items = calculate_volumes_adss(inputs)
         else:
             items = calculate_volumes(inputs)
-        # Build maps for fast lookup and to handle variants (J-/M- prefixes)
+        # Build maps for fast, case-insensitive lookup and to handle J-/M- variants
+        # direct_map: maps full designator (lowercase) -> summed volume (exact matches)
+        # base_sum_map: maps stripped designator (without leading J-/M- prefix, lowercase) -> summed volume (original + J + M)
         direct_map = {}
-        base_map = {}
+        base_sum_map = {}
         preliminary_item = None
         for item in items:
             des = item.get('designator')
-            vol = item.get('volume', 0)
+            try:
+                vol = float(item.get('volume') or 0)
+            except:
+                vol = 0
             if des:
-                direct_map[des] = vol
-                # capture preliminary special item (izin)
-                if 'Preliminary' in des:
+                key = des.strip().lower()
+                # sum volumes for identical designators (safe for duplicates)
+                direct_map[key] = direct_map.get(key, 0) + vol
+                # detect preliminary special item (izin)
+                if 'preliminary' in key:
                     preliminary_item = item
-                # if designator starts with J- or M-, also map the base name
-                if des.startswith('J-') or des.startswith('M-'):
-                    base = des[2:]
-                    # prefer the first encountered non-zero volume for the base name
-                    if base not in base_map and vol is not None:
-                        base_map[base] = vol
+                # compute base (strip leading j- or m- if present)
+                if key.startswith('j-') or key.startswith('m-'):
+                    base = key[2:].strip()
+                else:
+                    base = key
+                base_sum_map[base] = base_sum_map.get(base, 0) + vol
 
+        # Track which items we actually wrote to the worksheet (deduplicate by designator shown in sheet)
+        written_map = {}
         for row in range(9, 289):
             cell_value = str(ws[f'B{row}'].value or "").strip()
-            vol_to_write = None
+            lk = cell_value.lower()
+            vol_to_write = 0
 
-            # direct match first (covers original labels and any exact designator)
-            if cell_value in direct_map:
-                vol_to_write = direct_map[cell_value]
-            # fallback: if template uses original label but items only have J-/M- variants
-            elif cell_value in base_map:
-                vol_to_write = base_map[cell_value]
+            # If the template row is a J- or M- prefixed designator, write only the direct J/M volume
+            if lk.startswith('j-') or lk.startswith('m-'):
+                vol_to_write = direct_map.get(lk, 0)
+            else:
+                # For non-prefixed (base/original) rows, write the aggregated sum (original + J + M)
+                vol_to_write = base_sum_map.get(lk, 0)
 
             if vol_to_write and vol_to_write > 0:
                 ws[f'G{row}'] = vol_to_write
                 # write izin_value for preliminary row if available
-                if 'Preliminary' in cell_value and preliminary_item and 'izin_value' in preliminary_item:
+                if 'preliminary' in lk and preliminary_item and 'izin_value' in preliminary_item:
                     ws[f'F{row}'] = preliminary_item.get('izin_value', ws[f'F{row}'].value)
+
+                # accumulate written items (merge duplicates if same designator appears multiple rows)
+                if cell_value in written_map:
+                    written_map[cell_value]['volume'] = written_map[cell_value].get('volume', 0) + vol_to_write
+                else:
+                    entry = {'designator': cell_value, 'volume': vol_to_write}
+                    # include izin_value if it's the preliminary row
+                    if 'preliminary' in lk and preliminary_item and 'izin_value' in preliminary_item:
+                        entry['izin_value'] = preliminary_item.get('izin_value')
+                    written_map[cell_value] = entry
         
         material = jasa = 0.0
         for row in range(9, 289):
@@ -677,6 +697,9 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
         wb.save(output)
         output.seek(0)
         
+        # Build updated_items list from what we actually wrote to the sheet (preserves what user downloads)
+        updated_items = list(written_map.values())
+
         return {
             'excel_data': output,
             'summary': {
@@ -687,7 +710,7 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
                 'total_odp': total_odp,
                 'total_ports': total_ports
             },
-            'updated_items': [item for item in items if item['volume'] > 0]
+            'updated_items': updated_items
         }
     
     except Exception as e:

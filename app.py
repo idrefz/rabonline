@@ -623,12 +623,16 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             items = calculate_volumes(inputs)
 
         # Update template rows (9..1082) with calculated volumes
+        base_tray_names = {"Base Tray ODC", "J-Base Tray ODC", "M-Base Tray ODC"}
         for row in range(9, 1083):
             cell_value = str(ws[f'B{row}'].value or "").strip()
 
             for item in items:
-                # write volume only when item has volume > 0 (so vol_base_tray rules apply)
-                if cell_value == item["designator"] and item.get("volume", 0) > 0:
+                # write volume when item has volume > 0
+                # or when source is ODC and the row is a Base Tray designator (we want them visible in the download)
+                if cell_value == item["designator"] and (
+                    item.get("volume", 0) > 0 or (inputs.get('sumber') == 'ODC' and item.get('designator') in base_tray_names)
+                ):
                     ws[f'G{row}'] = item.get("volume", 0)
                     if "Preliminary" in cell_value and "izin_value" in item:
                         ws[f'F{row}'] = item["izin_value"]
@@ -662,10 +666,12 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
         updated_sheet = wb.create_sheet(title='Updated Items')
         # header
         updated_sheet.append(['designator', 'volume', 'izin_value'])
-        # include only items which have volume > 0 (honor vol_base_tray calculation)
+        # include items which have volume > 0
+        # also include Base Tray designators when source is ODC so they appear in the downloaded file
         updated_items_list = []
         for item in items:
-            if item.get('volume', 0) > 0:
+            include = item.get('volume', 0) > 0 or (inputs.get('sumber') == 'ODC' and item.get('designator') in base_tray_names)
+            if include:
                 designator = item.get('designator', '')
                 volume = item.get('volume', 0)
                 izin_value = item.get('izin_value', '') if 'izin_value' in item else ''

@@ -427,6 +427,39 @@ def calculate_volumes_adss(inputs):
         }
     ]
 
+def _normalize_base_tray_items(items, inputs):
+    """Ensure J-/M- variants of Base Tray ODC carry the same numeric volume as Base Tray ODC.
+
+    This helps guarantee the J- and M- rows are counted with the same number in the
+    template and Updated Items sheet when sumber == 'ODC'.
+    """
+    try:
+        # find base tray value
+        base_vol = None
+        for it in items:
+            if it.get('designator') == 'Base Tray ODC':
+                base_vol = it.get('volume', 0)
+                break
+
+        if base_vol is None:
+            return items
+
+        # normalize J-/M- variants
+        for it in items:
+            if it.get('designator') in ('J-Base Tray ODC', 'M-Base Tray ODC'):
+                # set numeric type (int if whole)
+                try:
+                    if isinstance(base_vol, float) and base_vol.is_integer():
+                        it['volume'] = int(base_vol)
+                    else:
+                        it['volume'] = base_vol
+                except Exception:
+                    it['volume'] = base_vol
+
+        return items
+    except Exception:
+        return items
+
 def calculate_volumes(inputs):
     # Non-ADSS volume calculations (mirror logic from ADSS variant)
     total_odp = inputs.get('odp_8', 0) + inputs.get('odp_16', 0)
@@ -621,6 +654,9 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
             items = calculate_volumes_adss(inputs)
         else:
             items = calculate_volumes(inputs)
+
+        # Normalize base tray variants so J- and M- rows match the Base Tray ODC numeric volume
+        items = _normalize_base_tray_items(items, inputs)
 
         # Update template rows (9..1082) with calculated volumes
         base_tray_names = {"Base Tray ODC", "J-Base Tray ODC", "M-Base Tray ODC"}

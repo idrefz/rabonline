@@ -421,7 +421,7 @@ def calculate_volumes_adss(inputs):
         {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "Preliminary Project HRB/Kawasan Khusus",
+            "designator": "J-Preliminary Project",
             "volume": 1 if inputs['izin'] else 0,
             "izin_value": float(inputs['izin']) if inputs['izin'] and inputs['izin'].replace('.', '', 1).isdigit() else 0
         }
@@ -616,37 +616,39 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
     try:
         wb = openpyxl.load_workbook(uploaded_file)
         ws = wb.active
-        
+
         if adss_mode:
             items = calculate_volumes_adss(inputs)
         else:
             items = calculate_volumes(inputs)
-        
-        for row in range(9, 289):
+
+        # Update template rows (9..1082) with calculated volumes
+        for row in range(9, 1083):
             cell_value = str(ws[f'B{row}'].value or "").strip()
-            
+
             for item in items:
-                if cell_value == item["designator"] and item["volume"] > 0:
+                if cell_value == item["designator"] and item.get("volume", 0) > 0:
                     ws[f'G{row}'] = item["volume"]
                     if "Preliminary" in cell_value and "izin_value" in item:
                         ws[f'F{row}'] = item["izin_value"]
-        
+
+        # Calculate totals
         material = jasa = 0.0
-        for row in range(9, 289):
+        for row in range(9, 1083):
             try:
                 h_mat = float(ws[f'E{row}'].value or 0)
                 h_jasa = float(ws[f'F{row}'].value or 0)
                 vol = float(ws[f'G{row}'].value or 0)
                 material += h_mat * vol
                 jasa += h_jasa * vol
-            except:
+            except Exception:
                 continue
-        
+
         total = material + jasa
-        total_odp = inputs['odp_8'] + inputs['odp_16']
-        total_ports = (total_odp * 8) + (1 if inputs.get('otb_12', 0) > 0 else 0) * 8
+        total_odp = inputs.get('odp_8', 0) + inputs.get('odp_16', 0)
+        total_ports = (total_odp * 8) + ((1 if inputs.get('otb_12', 0) > 0 else 0) * 8)
         cpp = round(total / total_ports, 2) if total_ports > 0 else 0
-        
+
         output = BytesIO()
         # Add a sheet that explicitly lists updated items (designator, volume, izin_value if present)
         try:
@@ -667,7 +669,7 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
 
         wb.save(output)
         output.seek(0)
-        
+
         return {
             'excel_data': output,
             'summary': {
@@ -678,11 +680,11 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
                 'total_odp': total_odp,
                 'total_ports': total_ports
             },
-            'updated_items': [item for item in items if item['volume'] > 0]
+            'updated_items': [item for item in items if item.get('volume', 0) > 0]
         }
-    
+
     except Exception as e:
-        st.error(f"Error generating modified KML: {str(e)}")
+        st.error(f"Error generating modified BOQ: {str(e)}")
         return None
 
 def generate_adss_kml(inputs):

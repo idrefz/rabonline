@@ -606,7 +606,7 @@ def calculate_volumes_adss(inputs):
         {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "Preliminary Project HRB/Kawasan Khusus",
+            "designator": "J-Preliminary Project",
             "volume": 1 if inputs['izin'] else 0,
             "izin_value": float(inputs['izin']) if inputs['izin'] and inputs['izin'].replace('.', '', 1).isdigit() else 0
         }
@@ -676,6 +676,28 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
                     if 'preliminary' in lk and preliminary_item and 'izin_value' in preliminary_item:
                         entry['izin_value'] = preliminary_item.get('izin_value')
                     written_map[cell_value] = entry
+
+        # Ensure every written item exists in the worksheet; if not, append it so the downloaded
+        # workbook contains the exact items visible in the UI.
+        # Collect existing labels in the template region (rows 9..288)
+        existing_labels = set()
+        for row in range(9, 289):
+            existing_labels.add(str(ws[f'B{row}'].value or "").strip())
+
+        # Append missing items starting after the current max row
+        append_row = ws.max_row + 1
+        for label, entry in list(written_map.items()):
+            if label not in existing_labels:
+                # Write designator in column B and volume in column G
+                ws[f'B{append_row}'] = label
+                # set default material/jasa to 0 unless template expects other columns
+                try:
+                    ws[f'E{append_row}'] = 0
+                    ws[f'F{append_row}'] = entry.get('izin_value', 0) if 'izin_value' in entry else 0
+                except Exception:
+                    pass
+                ws[f'G{append_row}'] = entry.get('volume', 0)
+                append_row += 1
         
         material = jasa = 0.0
         for row in range(9, 289):
@@ -707,7 +729,7 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
                 'total_odp': total_odp,
                 'total_ports': total_ports
             },
-            'updated_items': [item for item in items if item['volume'] > 0]
+            'updated_items': list(written_map.values())
         }
     
     except Exception as e:

@@ -366,102 +366,53 @@ def calculate_volumes_adss(inputs):
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
-        {"designator": "AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
         {"designator": "J-AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
         {"designator": "M-AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
-        {"designator": "AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
         {"designator": "J-AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
         {"designator": "M-AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
-        {"designator": "ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "J-ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
         {"designator": "M-ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
-        {"designator": "ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
         {"designator": "J-ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
         {"designator": "M-ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
-        {"designator": "PU-S7.0-400NM", "volume": inputs['tiang_new']},
         {"designator": "J-PU-S7.0-400NM", "volume": inputs['tiang_new']},
         {"designator": "M-PU-S7.0-400NM", "volume": inputs['tiang_new']},
-        {"designator": "PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
         {"designator": "J-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
         {"designator": "M-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
-        {"designator": "PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
         {"designator": "J-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
         {"designator": "M-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
-        {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
-        {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
-        {"designator": "OS-SM-1", "volume": vol_os_sm_1},
+        {"designator": "J-OS-SM-1", "volume": vol_os_sm_1_odc},
+        {"designator": "J-OS-SM-1", "volume": vol_os_sm_1_odp},
         {"designator": "J-OS-SM-1", "volume": vol_os_sm_1},
-        {"designator": "PC-UPC-652-2", "volume": vol_pc_upc},
         {"designator": "J-PC-UPC-652-2", "volume": vol_pc_upc},
         {"designator": "M-PC-UPC-652-2", "volume": vol_pc_upc},
-        {"designator": "PC-APC/UPC-652-A1", "volume": vol_pc_apc},
         {"designator": "J-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
         {"designator": "M-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
-        {"designator": "PS-1-4-ODC", "volume": vol_ps_1_4_odc},
         {"designator": "J-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
         {"designator": "M-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
-        {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "J-TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "M-TC-02-ODC", "volume": vol_tc_02_odc},
-        {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "J-DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "M-DD-HDPE-40-1", "volume": vol_dd_hdpe},
-        {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
         {"designator": "J-BC-TR-0.6", "volume": vol_bc_tr},
-        {"designator": "Base Tray ODC", "volume": vol_base_tray},
         {"designator": "J-Base Tray ODC", "volume": vol_base_tray},
         {"designator": "M-Base Tray ODC", "volume": vol_base_tray},
-        {"designator": "SC-OF-SM-24", "volume": inputs.get('closure', 0)},
         {"designator": "J-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
         {"designator": "M-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
-        {"designator": "TC-SM-12", "volume": inputs.get('otb_12', 0)},
         {"designator": "J-TC-SM-12", "volume": inputs.get('otb_12', 0)},
         {"designator": "M-TC-SM-12", "volume": inputs.get('otb_12', 0)},
-        {"designator": "PS-1-8-ODP", "volume": vol_ps_1_8_odp},
         {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "J-Preliminary Project",
+            "designator": "Preliminary Project HRB/Kawasan Khusus",
             "volume": 1 if inputs['izin'] else 0,
             "izin_value": float(inputs['izin']) if inputs['izin'] and inputs['izin'].replace('.', '', 1).isdigit() else 0
         }
     ]
 
-def _normalize_base_tray_items(items, inputs):
-    """Ensure J-/M- variants of Base Tray ODC carry the same numeric volume as Base Tray ODC.
-
-    This helps guarantee the J- and M- rows are counted with the same number in the
-    template and Updated Items sheet when sumber == 'ODC'.
-    """
-    try:
-        # find base tray value
-        base_vol = None
-        for it in items:
-            if it.get('designator') == 'Base Tray ODC':
-                base_vol = it.get('volume', 0)
-                break
-
-        if base_vol is None:
-            return items
-
-        # normalize J-/M- variants
-        for it in items:
-            if it.get('designator') in ('J-Base Tray ODC', 'M-Base Tray ODC'):
-                # set numeric type (int if whole)
-                try:
-                    if isinstance(base_vol, float) and base_vol.is_integer():
-                        it['volume'] = int(base_vol)
-                    else:
-                        it['volume'] = base_vol
-                except Exception:
-                    it['volume'] = base_vol
-
-        return items
-    except Exception:
-        return items
-
 def calculate_volumes(inputs):
-    # Non-ADSS volume calculations (mirror logic from ADSS variant)
+    """Calculate BOQ volumes for non-ADSS (distribution) mode.
+    This mirrors the ADSS calculation structure but uses kabel_12/kabel_24 fields.
+    """
     total_odp = inputs.get('odp_8', 0) + inputs.get('odp_16', 0)
 
     vol_kabel_12 = round(inputs.get('kabel_12', 0) * 1.02) if inputs.get('kabel_12', 0) > 0 else 0
@@ -489,74 +440,36 @@ def calculate_volumes(inputs):
 
     vol_os_sm_1 = vol_os_sm_1_odc + vol_os_sm_1_odp
     vol_pc_upc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
-    if total_odp > 0:
-        vol_pc_apc = 18 * (((total_odp - 1) // 4) + 1)
-    else:
-        vol_pc_apc = 0
+    vol_pc_apc = 18 * (((total_odp - 1) // 4) + 1) if total_odp > 0 else 0
     vol_ps_1_4_odc = ((total_odp - 1) // 4) + 1 if total_odp > 0 else 0
     vol_ps_1_8_odp = 1 if inputs.get('otb_12', 0) > 0 else 0
 
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
-        {"designator": "AC-OF-SM-ADSS-12D", "volume": 0},
-        {"designator": "J-AC-OF-SM-ADSS-12D", "volume": 0},
-        {"designator": "M-AC-OF-SM-ADSS-12D", "volume": 0},
-        {"designator": "AC-OF-SM-ADSS-24D", "volume": 0},
-        {"designator": "J-AC-OF-SM-ADSS-24D", "volume": 0},
-        {"designator": "M-AC-OF-SM-ADSS-24D", "volume": 0},
-        {"designator": "ODP Solid-PB-8 AS", "volume": inputs.get('odp_8', 0)},
-        {"designator": "J-ODP Solid-PB-8 AS", "volume": inputs.get('odp_8', 0)},
-        {"designator": "M-ODP Solid-PB-8 AS", "volume": inputs.get('odp_8', 0)},
-        {"designator": "ODP Solid-PB-16 AS", "volume": inputs.get('odp_16', 0)},
-        {"designator": "J-ODP Solid-PB-16 AS", "volume": inputs.get('odp_16', 0)},
-        {"designator": "M-ODP Solid-PB-16 AS", "volume": inputs.get('odp_16', 0)},
-        {"designator": "PU-S7.0-400NM", "volume": inputs.get('tiang_new', 0)},
-        {"designator": "J-PU-S7.0-400NM", "volume": inputs.get('tiang_new', 0)},
-        {"designator": "M-PU-S7.0-400NM", "volume": inputs.get('tiang_new', 0)},
-        {"designator": "PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
-        {"designator": "J-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
-        {"designator": "M-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
-        {"designator": "PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
-        {"designator": "J-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
-        {"designator": "M-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
-        {"designator": "OS-SM-1-ODC", "volume": vol_os_sm_1_odc},
-        {"designator": "OS-SM-1-ODP", "volume": vol_os_sm_1_odp},
-        {"designator": "OS-SM-1", "volume": vol_os_sm_1},
-        {"designator": "J-OS-SM-1", "volume": vol_os_sm_1},
-        {"designator": "PC-UPC-652-2", "volume": vol_pc_upc},
         {"designator": "J-PC-UPC-652-2", "volume": vol_pc_upc},
         {"designator": "M-PC-UPC-652-2", "volume": vol_pc_upc},
-        {"designator": "PC-APC/UPC-652-A1", "volume": vol_pc_apc},
         {"designator": "J-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
         {"designator": "M-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
-        {"designator": "PS-1-4-ODC", "volume": vol_ps_1_4_odc},
         {"designator": "J-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
         {"designator": "M-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
-        {"designator": "TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "J-TC-02-ODC", "volume": vol_tc_02_odc},
         {"designator": "M-TC-02-ODC", "volume": vol_tc_02_odc},
-        {"designator": "DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "J-DD-HDPE-40-1", "volume": vol_dd_hdpe},
         {"designator": "M-DD-HDPE-40-1", "volume": vol_dd_hdpe},
-        {"designator": "BC-TR-0.6", "volume": vol_bc_tr},
         {"designator": "J-BC-TR-0.6", "volume": vol_bc_tr},
-        {"designator": "Base Tray ODC", "volume": vol_base_tray},
         {"designator": "J-Base Tray ODC", "volume": vol_base_tray},
         {"designator": "M-Base Tray ODC", "volume": vol_base_tray},
-        {"designator": "SC-OF-SM-24", "volume": inputs.get('closure', 0)},
         {"designator": "J-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
         {"designator": "M-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
-        {"designator": "TC-SM-12", "volume": inputs.get('otb_12', 0)},
         {"designator": "J-TC-SM-12", "volume": inputs.get('otb_12', 0)},
         {"designator": "M-TC-SM-12", "volume": inputs.get('otb_12', 0)},
-        {"designator": "PS-1-8-ODP", "volume": vol_ps_1_8_odp},
         {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "J-Preliminary Project",
+            "designator": "Preliminary Project HRB/Kawasan Khusus",
             "volume": 1 if inputs.get('izin') else 0,
-            "izin_value": float(inputs.get('izin')) if inputs.get('izin') and str(inputs.get('izin')).replace('.', '', 1).isdigit() else 0
+            "izin_value": float(inputs['izin']) if inputs.get('izin') and str(inputs.get('izin')).replace('.', '', 1).isdigit() else 0
         }
     ]
 
@@ -602,44 +515,44 @@ def calculate_volumes_adss(inputs):
     return [
         {"designator": "AC-OF-SM-12-SC_O_STOCK", "volume": vol_kabel_12},
         {"designator": "AC-OF-SM-24-SC_O_STOCK", "volume": vol_kabel_24},
-        {"designator": "J-AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
-        {"designator": "M-AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
-        {"designator": "J-AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
-        {"designator": "M-AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
-        {"designator": "J-ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
-        {"designator": "M-ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
-        {"designator": "J-ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
-        {"designator": "M-ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
-        {"designator": "J-PU-S7.0-400NM", "volume": inputs['tiang_new']},
-        {"designator": "M-PU-S7.0-400NM", "volume": inputs['tiang_new']},
-        {"designator": "J-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
-        {"designator": "M-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
-        {"designator": "J-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
-        {"designator": "M-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
-        {"designator": "J-OS-SM-1", "volume": vol_os_sm_1_odc},
-        {"designator": "J-OS-SM-1", "volume": vol_os_sm_1_odp},
-        {"designator": "J-OS-SM-1", "volume": vol_os_sm_1},
-        {"designator": "J-PC-UPC-652-2", "volume": vol_pc_upc},
-        {"designator": "M-PC-UPC-652-2", "volume": vol_pc_upc},
-        {"designator": "J-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
-        {"designator": "M-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
-        {"designator": "J-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
-        {"designator": "M-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
-        {"designator": "J-TC-02-ODC", "volume": vol_tc_02_odc},
-        {"designator": "M-TC-02-ODC", "volume": vol_tc_02_odc},
-        {"designator": "J-DD-HDPE-40-1", "volume": vol_dd_hdpe},
-        {"designator": "M-DD-HDPE-40-1", "volume": vol_dd_hdpe},
-        {"designator": "J-BC-TR-0.6", "volume": vol_bc_tr},
-        {"designator": "J-Base Tray ODC", "volume": vol_base_tray},
-        {"designator": "M-Base Tray ODC", "volume": vol_base_tray},
-        {"designator": "J-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
-        {"designator": "M-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
-        {"designator": "J-TC-SM-12", "volume": inputs.get('otb_12', 0)},
-        {"designator": "M-TC-SM-12", "volume": inputs.get('otb_12', 0)},
-        {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
-        {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
+    {"designator": "J-AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
+    {"designator": "M-AC-OF-SM-ADSS-12D", "volume": vol_kabel_adss_12},
+    {"designator": "J-AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
+    {"designator": "M-AC-OF-SM-ADSS-24D", "volume": vol_kabel_adss_24},
+    {"designator": "J-ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
+    {"designator": "M-ODP Solid-PB-8 AS", "volume": inputs['odp_8']},
+    {"designator": "J-ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
+    {"designator": "M-ODP Solid-PB-16 AS", "volume": inputs['odp_16']},
+    {"designator": "J-PU-S7.0-400NM", "volume": inputs['tiang_new']},
+    {"designator": "M-PU-S7.0-400NM", "volume": inputs['tiang_new']},
+    {"designator": "J-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
+    {"designator": "M-PU-AS-HL", "volume": max(0, inputs.get('pu_as_hl', 0))},
+    {"designator": "J-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
+    {"designator": "M-PU-AS-SC", "volume": inputs.get('pu_as_sc', 0)},
+    {"designator": "J-OS-SM-1", "volume": vol_os_sm_1_odc},
+    {"designator": "J-OS-SM-1", "volume": vol_os_sm_1_odp},
+    {"designator": "J-OS-SM-1", "volume": vol_os_sm_1},
+    {"designator": "J-PC-UPC-652-2", "volume": vol_pc_upc},
+    {"designator": "M-PC-UPC-652-2", "volume": vol_pc_upc},
+    {"designator": "J-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
+    {"designator": "M-PC-APC/UPC-652-A1", "volume": vol_pc_apc},
+    {"designator": "J-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
+    {"designator": "M-PS-1-4-ODC", "volume": vol_ps_1_4_odc},
+    {"designator": "J-TC-02-ODC", "volume": vol_tc_02_odc},
+    {"designator": "M-TC-02-ODC", "volume": vol_tc_02_odc},
+    {"designator": "J-DD-HDPE-40-1", "volume": vol_dd_hdpe},
+    {"designator": "M-DD-HDPE-40-1", "volume": vol_dd_hdpe},
+    {"designator": "J-BC-TR-0.6", "volume": vol_bc_tr},
+    {"designator": "J-Base Tray ODC", "volume": vol_base_tray},
+    {"designator": "M-Base Tray ODC", "volume": vol_base_tray},
+    {"designator": "J-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
+    {"designator": "M-SC-OF-SM-24", "volume": inputs.get('closure', 0)},
+    {"designator": "J-TC-SM-12", "volume": inputs.get('otb_12', 0)},
+    {"designator": "M-TC-SM-12", "volume": inputs.get('otb_12', 0)},
+    {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
+    {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "J-Preliminary Project",
+            "designator": "Preliminary Project HRB/Kawasan Khusus",
             "volume": 1 if inputs['izin'] else 0,
             "izin_value": float(inputs['izin']) if inputs['izin'] and inputs['izin'].replace('.', '', 1).isdigit() else 0
         }
@@ -655,33 +568,19 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
         else:
             items = calculate_volumes(inputs)
 
-        # Normalize base tray variants so J- and M- rows match the Base Tray ODC numeric volume
-        items = _normalize_base_tray_items(items, inputs)
-
-        # Update template rows (9..1082) with calculated volumes
-        base_tray_names = {"Base Tray ODC", "J-Base Tray ODC", "M-Base Tray ODC"}
+        # Fill volumes into the template (rows 9..1082)
         for row in range(9, 1083):
             cell_value = str(ws[f'B{row}'].value or "").strip()
 
             for item in items:
-                # determine the volume to write
-                vol_value = item.get("volume", 0)
-                # If this is a Base Tray and source is ODC, always write the numeric volume (so J-/M- show numbers)
-                if cell_value == item["designator"] and (
-                    item.get("volume", 0) > 0 or (inputs.get('sumber') == 'ODC' and item.get('designator') in base_tray_names)
-                ):
-                    # convert floats to int if they're whole numbers for cleaner Excel cells
-                    try:
-                        if isinstance(vol_value, float) and vol_value.is_integer():
-                            vol_value = int(vol_value)
-                    except Exception:
-                        pass
-                    ws[f'G{row}'] = vol_value
+                if cell_value == item["designator"] and item["volume"] > 0:
+                    ws[f'G{row}'] = item["volume"]
                     if "Preliminary" in cell_value and "izin_value" in item:
                         ws[f'F{row}'] = item["izin_value"]
 
         # Calculate totals
-        material = jasa = 0.0
+        material = 0.0
+        jasa = 0.0
         for row in range(9, 1083):
             try:
                 h_mat = float(ws[f'E{row}'].value or 0)
@@ -694,46 +593,10 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
 
         total = material + jasa
         total_odp = inputs.get('odp_8', 0) + inputs.get('odp_16', 0)
-        total_ports = (total_odp * 8) + ((1 if inputs.get('otb_12', 0) > 0 else 0) * 8)
+        total_ports = (total_odp * 8) + (1 if inputs.get('otb_12', 0) > 0 else 0) * 8
         cpp = round(total / total_ports, 2) if total_ports > 0 else 0
 
         output = BytesIO()
-        # Add a sheet that explicitly lists updated items (designator, volume, izin_value if present)
-        try:
-            if 'Updated Items' in wb.sheetnames:
-                # remove existing sheet to avoid duplicates
-                del wb['Updated Items']
-        except Exception:
-            pass
-
-        updated_sheet = wb.create_sheet(title='Updated Items')
-        # header
-        updated_sheet.append(['designator', 'volume', 'izin_value'])
-        # include items which have volume > 0
-        # also include Base Tray designators when source is ODC so they appear in the downloaded file
-        updated_items_list = []
-        for item in items:
-            include = item.get('volume', 0) > 0 or (inputs.get('sumber') == 'ODC' and item.get('designator') in base_tray_names)
-            if include:
-                designator = item.get('designator', '')
-                raw_volume = item.get('volume', 0)
-                # For base tray ODC entries, always present numeric volume
-                if inputs.get('sumber') == 'ODC' and designator in base_tray_names:
-                    volume = raw_volume
-                else:
-                    volume = raw_volume
-                # normalize numeric types for Excel
-                try:
-                    if isinstance(volume, float) and volume.is_integer():
-                        volume = int(volume)
-                except Exception:
-                    pass
-                izin_value = item.get('izin_value', '') if 'izin_value' in item else ''
-                updated_sheet.append([designator, volume, izin_value])
-                item_copy = dict(item)
-                item_copy['volume'] = volume
-                updated_items_list.append(item_copy)
-
         wb.save(output)
         output.seek(0)
 
@@ -747,11 +610,11 @@ def process_boq_template(uploaded_file, inputs, lop_name, adss_mode=False):
                 'total_odp': total_odp,
                 'total_ports': total_ports
             },
-            'updated_items': updated_items_list
+            'updated_items': [item for item in items if item['volume'] > 0]
         }
 
     except Exception as e:
-        st.error(f"Error generating modified BOQ: {str(e)}")
+        st.error(f"Error generating BOQ: {str(e)}")
         return None
 
 def generate_adss_kml(inputs):
@@ -1160,7 +1023,7 @@ def adss_input_form():
             key='adss_template'
         )
 
-        submitted = st.form_submit_button("🚀 Generate BOQ OSP AKSES NEW", use_container_width=True)
+        submitted = st.form_submit_button("🚀 Generate BOQ ADSS", use_container_width=True)
         
         if submitted:
             if not st.session_state.boq_form_values.get('uploaded_file'):
@@ -1208,7 +1071,7 @@ def show():
     </style>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["📝 Manual Input", "🗺️ BOQ dari KML", "🌀 BOQ OSP AKSES NEW"])
+    tab1, tab2, tab3 = st.tabs(["📝 Manual Input", "🗺️ BOQ dari KML", "🌀 BOQ ADSS"])
     
     with tab1:
         manual_input_form()

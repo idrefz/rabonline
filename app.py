@@ -411,7 +411,7 @@ def calculate_volumes_adss(inputs):
         {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "Preliminary Project HRB/Kawasan Khusus",
+            "designator": "J-Preliminary Project",
             "volume": 1 if inputs['izin'] else 0,
             "izin_value": float(inputs['izin']) if inputs['izin'] and inputs['izin'].replace('.', '', 1).isdigit() else 0
         }
@@ -475,7 +475,7 @@ def calculate_volumes(inputs):
         {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "Preliminary Project HRB/Kawasan Khusus",
+            "designator": "J-Preliminary Project",
             "volume": 1 if inputs.get('izin') else 0,
             "izin_value": float(inputs['izin']) if inputs.get('izin') and str(inputs.get('izin')).replace('.', '', 1).isdigit() else 0
         }
@@ -565,7 +565,7 @@ def calculate_volumes_adss(inputs):
     {"designator": "J-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
     {"designator": "M-PS-1-8-ODX", "volume": vol_ps_1_8_odp},
         {
-            "designator": "Preliminary Project HRB/Kawasan Khusus",
+            "designator": "J-Preliminary Project",
             "volume": 1 if inputs['izin'] else 0,
             "izin_value": float(inputs['izin']) if inputs['izin'] and inputs['izin'].replace('.', '', 1).isdigit() else 0
         }
